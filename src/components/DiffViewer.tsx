@@ -8,6 +8,7 @@ interface DiffViewerProps {
   selectedFile: string | null;
   fromBranch: string;
   toBranch: string;
+  isSelected?: boolean;
 }
 
 interface DiffLine {
@@ -17,7 +18,7 @@ interface DiffLine {
   newLineNumber?: number;
 }
 
-const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch }) => {
+const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   
   const getLanguage = (filename: string | null) => {
@@ -175,13 +176,6 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
 
   const parsedDiff = parseDiff(diff);
 
-  // ファイルが選択された時にスクロールする
-  useEffect(() => {
-    if (selectedFile && diffContainerRef.current) {
-      diffContainerRef.current.scrollTop = 0;
-    }
-  }, [selectedFile]);
-
   return (
     <div className="bg-white rounded-lg shadow-sm border">
       <div className="px-4 py-3 border-b border-gray-200">
@@ -189,7 +183,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
           <div className="flex items-center">
             <FileText className="h-5 w-5 text-gray-500 mr-2" />
             <h3 className="text-lg font-medium text-gray-900">
-              {selectedFile ? `Diff: ${selectedFile}` : 'Diff View'}
+              {selectedFile ? `${selectedFile}` : 'Diff View'}
             </h3>
           </div>
           <div className="flex items-center text-sm text-gray-500">
@@ -201,7 +195,13 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       
       <div className="overflow-x-auto max-h-96 overflow-y-auto" ref={diffContainerRef}>
         <div className="font-mono text-sm">
-          {parsedDiff.map((line, index) => renderDiffLine(line, index))}
+          {parsedDiff.length > 0 ? (
+            parsedDiff.map((line, index) => renderDiffLine(line, index))
+          ) : (
+            <div className="px-4 py-8 text-center text-gray-500">
+              No changes found for this file
+            </div>
+          )}
         </div>
       </div>
     </div>

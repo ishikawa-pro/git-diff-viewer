@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import BranchSelector from './components/BranchSelector';
 import DiffViewer from './components/DiffViewer';
@@ -14,7 +14,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
-  const [fileDiff, setFileDiff] = useState<string>('');
+  const [fileDiffs, setFileDiffs] = useState<Record<string, string>>({});
+  const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const selectRepository = async () => {
     try {
@@ -58,7 +59,19 @@ function App() {
       const data = await window.electronAPI.getDiff(fromBranch, toBranch);
       setDiffData(data);
       setSelectedFile(null);
-      setFileDiff('');
+      
+      // 各ファイルの個別diffを取得
+      const diffs: Record<string, string> = {};
+      for (const file of data.files) {
+        try {
+          const result = await window.electronAPI.getFileDiff(fromBranch, toBranch, file.file);
+          diffs[file.file] = result.diff;
+        } catch (error) {
+          console.error(`Failed to fetch diff for ${file.file}:`, error);
+          diffs[file.file] = '';
+        }
+      }
+      setFileDiffs(diffs);
     } catch (error) {
       console.error('Failed to fetch diff:', error);
       alert(`Failed to fetch diff: ${error}`);
@@ -67,16 +80,16 @@ function App() {
     }
   };
 
-  const handleFileSelect = async (file: string) => {
+  const handleFileSelect = (file: string) => {
     setSelectedFile(file);
-    if (fromBranch && toBranch) {
-      try {
-        const result = await window.electronAPI.getFileDiff(fromBranch, toBranch, file);
-        setFileDiff(result.diff);
-      } catch (error) {
-        console.error('Failed to fetch file diff:', error);
-        setFileDiff('');
-      }
+    // 選択されたファイルのコンポーネントまでスクロール
+    const fileRef = fileRefs.current[file];
+    if (fileRef) {
+      fileRef.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start',
+        inline: 'nearest'
+      });
     }
   };
 
@@ -130,12 +143,29 @@ function App() {
                   />
                 </div>
                 <div className="lg:col-span-3">
-                  <DiffViewer
-                    diff={selectedFile ? fileDiff : diffData.diff}
-                    selectedFile={selectedFile}
-                    fromBranch={fromBranch}
-                    toBranch={toBranch}
-                  />
+                  <div className="space-y-6">
+                    {diffData.files.map((file) => (
+                      <div
+                        key={file.file}
+                        ref={(el) => {
+                          fileRefs.current[file.file] = el;
+                        }}
+                        className={`transition-all duration-300 ${
+                          selectedFile === file.file 
+                            ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg' 
+                            : ''
+                        }`}
+                      >
+                        <DiffViewer
+                          diff={fileDiffs[file.file] || ''}
+                          selectedFile={file.file}
+                          fromBranch={fromBranch}
+                          toBranch={toBranch}
+                          isSelected={selectedFile === file.file}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
