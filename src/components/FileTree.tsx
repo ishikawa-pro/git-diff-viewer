@@ -31,7 +31,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileSelect, selectedFile }
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border">
+    <div className="bg-white rounded-lg shadow-sm border sticky top-8">
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center">
           <GitBranch className="h-4 w-4 text-gray-500 mr-2" />
