@@ -193,7 +193,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
         </div>
       </div>
       
-      <div className="overflow-x-auto max-h-96 overflow-y-auto" ref={diffContainerRef}>
+      <div className="overflow-x-auto overflow-y-auto" ref={diffContainerRef}>
         <div className="font-mono text-sm">
           {parsedDiff.length > 0 ? (
             parsedDiff.map((line, index) => renderDiffLine(line, index))
