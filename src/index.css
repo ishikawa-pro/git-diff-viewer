@@ -24,16 +24,9 @@
   font-weight: bold;
 }
 
-/* Prism.js customizations */
-pre[class*="language-"] {
-  background: #f8fafc !important;
-  border-radius: 0 !important;
-}
-
-code[class*="language-"] {
+/* React Syntax Highlighter customizations */
+.react-syntax-highlighter-line-number {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
-  font-size: 13px !important;
-  line-height: 1.5 !important;
 }
 
 /* Electron specific styles */

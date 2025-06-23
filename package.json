@@ -14,29 +14,35 @@
     "electron-pack": "npm run build && electron-builder",
     "dist": "npm run build && cp -r electron build/ && electron-builder --publish=never"
   },
-  "keywords": ["git", "diff", "viewer", "electron", "syntax-highlighting"],
+  "keywords": [
+    "git",
+    "diff",
+    "viewer",
+    "electron",
+    "syntax-highlighting"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@types/node": "^16.18.68",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "typescript": "^4.9.5",
-    "prismjs": "^1.29.0",
-    "@types/prismjs": "^1.26.3",
-    "lucide-react": "^0.294.0",
-    "simple-git": "^3.20.0"
+    "react-syntax-highlighter": "^15.6.1",
+    "simple-git": "^3.20.0",
+    "typescript": "^4.9.5"
   },
   "devDependencies": {
-    "tailwindcss": "^3.3.6",
     "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
+    "concurrently": "^8.2.2",
     "electron": "^27.1.0",
     "electron-builder": "^24.6.4",
-    "concurrently": "^8.2.2",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
     "wait-on": "^7.2.0"
   },
   "browserslist": {
@@ -51,4 +57,4 @@
       "last 1 safari version"
     ]
   }
-} 
+}
