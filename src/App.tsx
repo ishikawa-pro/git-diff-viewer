@@ -14,6 +14,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
+  const [fileDiff, setFileDiff] = useState<string>('');
 
   const selectRepository = async () => {
     try {
@@ -56,11 +57,26 @@ function App() {
     try {
       const data = await window.electronAPI.getDiff(fromBranch, toBranch);
       setDiffData(data);
+      setSelectedFile(null);
+      setFileDiff('');
     } catch (error) {
       console.error('Failed to fetch diff:', error);
       alert(`Failed to fetch diff: ${error}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileSelect = async (file: string) => {
+    setSelectedFile(file);
+    if (fromBranch && toBranch) {
+      try {
+        const result = await window.electronAPI.getFileDiff(fromBranch, toBranch, file);
+        setFileDiff(result.diff);
+      } catch (error) {
+        console.error('Failed to fetch file diff:', error);
+        setFileDiff('');
+      }
     }
   };
 
@@ -109,13 +125,13 @@ function App() {
                 <div className="lg:col-span-1">
                   <FileTree
                     files={diffData.files}
-                    onFileSelect={setSelectedFile}
+                    onFileSelect={handleFileSelect}
                     selectedFile={selectedFile}
                   />
                 </div>
                 <div className="lg:col-span-3">
                   <DiffViewer
-                    diff={diffData.diff}
+                    diff={selectedFile ? fileDiff : diffData.diff}
                     selectedFile={selectedFile}
                     fromBranch={fromBranch}
                     toBranch={toBranch}

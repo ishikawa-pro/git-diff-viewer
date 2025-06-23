@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { FileText, GitCompare } from 'lucide-react';
@@ -18,6 +18,7 @@ interface DiffLine {
 }
 
 const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch }) => {
+  const diffContainerRef = useRef<HTMLDivElement>(null);
   
   const getLanguage = (filename: string | null) => {
     if (!filename) return 'diff';
@@ -174,6 +175,13 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
 
   const parsedDiff = parseDiff(diff);
 
+  // ファイルが選択された時にスクロールする
+  useEffect(() => {
+    if (selectedFile && diffContainerRef.current) {
+      diffContainerRef.current.scrollTop = 0;
+    }
+  }, [selectedFile]);
+
   return (
     <div className="bg-white rounded-lg shadow-sm border">
       <div className="px-4 py-3 border-b border-gray-200">
@@ -191,7 +199,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
         </div>
       </div>
       
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-96 overflow-y-auto" ref={diffContainerRef}>
         <div className="font-mono text-sm">
           {parsedDiff.map((line, index) => renderDiffLine(line, index))}
         </div>
