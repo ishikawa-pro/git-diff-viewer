@@ -1,0 +1,25 @@
+{
+  "appId": "com.diffviewer.app",
+  "productName": "Git Diff Viewer",
+  "extends": null,
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "build/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "build/electron/main.js"
+  },
+  "mac": {
+    "category": "public.app-category.developer-tools",
+    "target": "dmg"
+  },
+  "win": {
+    "target": "nsis"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+} 

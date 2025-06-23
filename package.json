@@ -1,0 +1,54 @@
+{
+  "name": "diff-viewer",
+  "version": "1.0.0",
+  "description": "A rich Git diff viewer with syntax highlighting",
+  "main": "build/electron/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "electron": "ELECTRON_IS_DEV=true electron electron/main.js",
+    "electron-dev": "concurrently \"npm start\" \"wait-on http://localhost:3000 && NODE_ENV=development ELECTRON_IS_DEV=true electron electron/main.js\"",
+    "electron-pack": "npm run build && electron-builder",
+    "dist": "npm run build && cp -r electron build/ && electron-builder --publish=never"
+  },
+  "keywords": ["git", "diff", "viewer", "electron", "syntax-highlighting"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^16.18.68",
+    "@types/react": "^18.2.42",
+    "@types/react-dom": "^18.2.17",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.9.5",
+    "prismjs": "^1.29.0",
+    "@types/prismjs": "^1.26.3",
+    "lucide-react": "^0.294.0",
+    "simple-git": "^3.20.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.6",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "electron": "^27.1.0",
+    "electron-builder": "^24.6.4",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+} 
