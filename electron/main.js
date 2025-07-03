@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const { simpleGit } = require('simple-git');
 const fs = require('fs');
@@ -7,6 +7,7 @@ const sqlite3 = require('sqlite3').verbose();
 let mainWindow;
 let git;
 let db;
+let windows = new Map();
 
 function initDatabase() {
   const userDataPath = app.getPath('userData');
@@ -86,10 +87,16 @@ function getRepoHistory() {
   });
 }
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+function createWindow(repoPath = null) {
+  // Calculate position offset for new windows
+  const windowCount = windows.size;
+  const offset = windowCount * 30; // 30px offset for each new window
+  
+  const window = new BrowserWindow({
     width: 1400,
     height: 900,
+    x: 100 + offset,
+    y: 100 + offset,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -100,33 +107,124 @@ function createWindow() {
     show: false
   });
 
+  // Store window reference
+  const windowId = window.id;
+  windows.set(windowId, { window, repoPath, git: null });
+
+  // Set main window if it's the first one
+  if (!mainWindow) {
+    mainWindow = window;
+  }
+
   // Load the app
   const isDev = process.env.ELECTRON_IS_DEV === 'true' || process.env.NODE_ENV === 'development' || !app.isPackaged;
   
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000').catch((err) => {
+    window.loadURL('http://localhost:3000').catch((err) => {
       console.error('Failed to load development server:', err);
       // Retry after a short delay
       setTimeout(() => {
-        mainWindow.loadURL('http://localhost:3000');
+        window.loadURL('http://localhost:3000');
       }, 1000);
     });
-    mainWindow.webContents.openDevTools();
+    window.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../index.html'));
+    window.loadFile(path.join(__dirname, '../index.html'));
   }
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+  window.once('ready-to-show', () => {
+    window.show();
+    
+    // If repoPath is provided, initialize the repository for this window
+    if (repoPath) {
+      window.webContents.send('initialize-with-repo', repoPath);
+    }
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  window.on('closed', () => {
+    windows.delete(windowId);
+    if (window === mainWindow) {
+      mainWindow = null;
+    }
   });
+
+  return window;
+}
+
+function createMenu() {
+  const template = [
+    {
+      label: app.getName(),
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideothers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          click: () => {
+            createWindow();
+          }
+        },
+        { type: 'separator' },
+        { role: 'close' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectall' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 }
 
 app.whenReady().then(() => {
   initDatabase();
+  createMenu();
   createWindow();
 });
 
@@ -143,8 +241,10 @@ app.on('activate', () => {
 });
 
 // IPC Handlers
-ipcMain.handle('select-directory', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+ipcMain.handle('select-directory', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  
+  const result = await dialog.showOpenDialog(senderWindow, {
     properties: ['openDirectory'],
     title: 'Select Git Repository'
   });
@@ -154,7 +254,15 @@ ipcMain.handle('select-directory', async () => {
     
     // Check if it's a git repository
     if (fs.existsSync(path.join(repoPath, '.git'))) {
-      git = simpleGit(repoPath);
+      const windowId = senderWindow.id;
+      const windowData = windows.get(windowId);
+      
+      if (windowData) {
+        windowData.git = simpleGit(repoPath);
+        windowData.repoPath = repoPath;
+        git = windowData.git; // Set global git for compatibility
+      }
+      
       return { success: true, path: repoPath };
     } else {
       return { success: false, error: 'Selected directory is not a Git repository' };
@@ -171,28 +279,45 @@ ipcMain.handle('initialize-repository', async (event, repoPath) => {
   
   // Check if it's a git repository
   if (fs.existsSync(path.join(repoPath, '.git'))) {
-    git = simpleGit(repoPath);
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    const windowId = senderWindow.id;
+    const windowData = windows.get(windowId);
+    
+    if (windowData) {
+      windowData.git = simpleGit(repoPath);
+      windowData.repoPath = repoPath;
+      git = windowData.git; // Set global git for compatibility
+    }
+    
     return { success: true, path: repoPath };
   } else {
     return { success: false, error: 'Selected directory is not a Git repository' };
   }
 });
 
-ipcMain.handle('get-branches', async () => {
-  if (!git) {
+ipcMain.handle('get-branches', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
     throw new Error('No repository selected');
   }
   
   try {
-    const branches = await git.branch();
+    const branches = await windowData.git.branch();
     return branches.all;
   } catch (error) {
     throw new Error(`Failed to get branches: ${error.message}`);
   }
 });
 
-ipcMain.handle('get-default-branch', async () => {
-  if (!git) {
+ipcMain.handle('get-default-branch', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
     throw new Error('No repository selected');
   }
   
@@ -203,7 +328,7 @@ ipcMain.handle('get-default-branch', async () => {
     
     try {
       const { stdout } = await execAsync('gh repo view --json defaultBranchRef --jq .defaultBranchRef.name', {
-        cwd: git._baseDir
+        cwd: windowData.git._baseDir
       });
       const defaultBranch = stdout.trim();
       if (defaultBranch) {
@@ -214,11 +339,11 @@ ipcMain.handle('get-default-branch', async () => {
     }
     
     try {
-      const remotes = await git.getRemotes();
+      const remotes = await windowData.git.getRemotes();
       
       if (remotes.length > 0) {
         const remoteName = remotes[0].name;
-        const result = await git.raw(['symbolic-ref', `refs/remotes/${remoteName}/HEAD`]);
+        const result = await windowData.git.raw(['symbolic-ref', `refs/remotes/${remoteName}/HEAD`]);
         const defaultBranch = result.trim().replace(`refs/remotes/${remoteName}/`, '');
         return defaultBranch;
       }
@@ -226,7 +351,7 @@ ipcMain.handle('get-default-branch', async () => {
       console.log('git symbolic-ref failed, using branch detection');
     }
     
-    const branches = await git.branch();
+    const branches = await windowData.git.branch();
     if (branches.all.includes('main')) {
       return 'main';
     } else if (branches.all.includes('master')) {
@@ -236,19 +361,23 @@ ipcMain.handle('get-default-branch', async () => {
     return branches.current || branches.all[0];
   } catch (error) {
     console.error('Error getting default branch:', error);
-    const branches = await git.branch();
+    const branches = await windowData.git.branch();
     return branches.current || branches.all[0] || 'main';
   }
 });
 
 ipcMain.handle('get-diff', async (event, fromBranch, toBranch) => {
-  if (!git) {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
     throw new Error('No repository selected');
   }
   
   try {
-    const diff = await git.diff([fromBranch, toBranch]);
-    const diffSummary = await git.diffSummary([fromBranch, toBranch]);
+    const diff = await windowData.git.diff([fromBranch, toBranch]);
+    const diffSummary = await windowData.git.diffSummary([fromBranch, toBranch]);
     
     return {
       diff,
@@ -265,26 +394,34 @@ ipcMain.handle('get-diff', async (event, fromBranch, toBranch) => {
 });
 
 ipcMain.handle('get-file-diff', async (event, fromBranch, toBranch, filePath) => {
-  if (!git) {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
     throw new Error('No repository selected');
   }
   
   try {
-    const diff = await git.diff([fromBranch, toBranch, '--', filePath]);
+    const diff = await windowData.git.diff([fromBranch, toBranch, '--', filePath]);
     return { diff };
   } catch (error) {
     throw new Error(`Failed to get file diff: ${error.message}`);
   }
 });
 
-ipcMain.handle('get-repo-info', async () => {
-  if (!git) {
+ipcMain.handle('get-repo-info', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
     return null;
   }
   
   try {
-    const remotes = await git.getRemotes();
-    const status = await git.status();
+    const remotes = await windowData.git.getRemotes();
+    const status = await windowData.git.status();
     return {
       remotes: remotes.map(remote => remote.name),
       currentBranch: status.current,

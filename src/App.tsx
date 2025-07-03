@@ -5,6 +5,7 @@ import DiffViewer from './components/DiffViewer';
 import FileTree from './components/FileTree';
 import GlobalRefreshButton from './components/GlobalRefreshButton';
 import { DiffData, FileChange, RepoInfo, RepoHistoryItem } from './types';
+import { ArrowLeft } from 'lucide-react';
 
 function App() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -154,12 +155,34 @@ function App() {
     }
   };
 
+  const backToRepositorySelection = () => {
+    setSelectedRepo(null);
+    setBranches([]);
+    setFromBranch('');
+    setToBranch('');
+    setDiffData(null);
+    setSelectedFile(null);
+    setRepoInfo(null);
+    setFileDiffs({});
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <h1 className="text-3xl font-bold text-gray-900">Git Diff Viewer</h1>
+            <div className="flex items-center gap-4">
+              {selectedRepo && (
+                <button
+                  onClick={backToRepositorySelection}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                  title="Back to repository selection"
+                >
+                  <ArrowLeft size={20} />
+                </button>
+              )}
+              <h1 className="text-3xl font-bold text-gray-900">Git Diff Viewer</h1>
+            </div>
             {selectedRepo && (
               <div className="text-sm text-gray-500">
                 Repository: {selectedRepo.split('/').pop()}
