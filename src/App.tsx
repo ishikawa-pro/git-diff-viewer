@@ -3,6 +3,7 @@ import RepositorySelector from './components/RepositorySelector';
 import BranchSelector from './components/BranchSelector';
 import DiffViewer from './components/DiffViewer';
 import FileTree from './components/FileTree';
+import GlobalRefreshButton from './components/GlobalRefreshButton';
 import { DiffData, FileChange, RepoInfo, RepoHistoryItem } from './types';
 
 function App() {
@@ -16,6 +17,8 @@ function App() {
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [fileDiffs, setFileDiffs] = useState<Record<string, string>>({});
   const [repoHistory, setRepoHistory] = useState<RepoHistoryItem[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isGlobalRefreshing, setIsGlobalRefreshing] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const selectRepository = async (repoPath?: string) => {
@@ -127,6 +130,30 @@ function App() {
     }
   };
 
+  const handleRefresh = async () => {
+    if (!fromBranch || !toBranch) return;
+    
+    setIsRefreshing(true);
+    try {
+      await fetchDiff();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleGlobalRefresh = async () => {
+    if (!fromBranch || !toBranch) return;
+    
+    setIsGlobalRefreshing(true);
+    try {
+      await loadBranches();
+      await loadRepoInfo();
+      await fetchDiff();
+    } finally {
+      setIsGlobalRefreshing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow-sm border-b">
@@ -152,14 +179,23 @@ function App() {
           <RepositorySelector onSelect={() => selectRepository()} repoHistory={repoHistory} onSelectFromHistory={(repoPath: string) => selectRepository(repoPath)} />
         ) : (
           <>
-            <BranchSelector
-              branches={branches}
-              fromBranch={fromBranch}
-              toBranch={toBranch}
-              onFromBranchChange={setFromBranch}
-              onToBranchChange={setToBranch}
-              onCompare={fetchDiff}
-            />
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <BranchSelector
+                  branches={branches}
+                  fromBranch={fromBranch}
+                  toBranch={toBranch}
+                  onFromBranchChange={setFromBranch}
+                  onToBranchChange={setToBranch}
+                  onCompare={fetchDiff}
+                />
+              </div>
+              <GlobalRefreshButton
+                onRefresh={handleGlobalRefresh}
+                isRefreshing={isGlobalRefreshing}
+                disabled={!fromBranch || !toBranch}
+              />
+            </div>
 
             {loading && (
               <div className="flex justify-center items-center py-8">
@@ -196,6 +232,8 @@ function App() {
                           fromBranch={fromBranch}
                           toBranch={toBranch}
                           isSelected={selectedFile === file.file}
+                          onRefresh={handleRefresh}
+                          isRefreshing={isRefreshing}
                         />
                       </div>
                     ))}

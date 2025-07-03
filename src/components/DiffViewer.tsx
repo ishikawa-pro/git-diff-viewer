@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { FileText, GitCompare } from 'lucide-react';
+import { FileText, GitCompare, RefreshCw } from 'lucide-react';
 
 interface DiffViewerProps {
   diff: string;
@@ -9,6 +9,8 @@ interface DiffViewerProps {
   fromBranch: string;
   toBranch: string;
   isSelected?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 interface DiffLine {
@@ -18,7 +20,7 @@ interface DiffLine {
   newLineNumber?: number;
 }
 
-const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false }) => {
+const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   
   const getLanguage = (filename: string | null) => {
@@ -186,9 +188,22 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
               {selectedFile ? `${selectedFile}` : 'Diff View'}
             </h3>
           </div>
-          <div className="flex items-center text-sm text-gray-500">
-            <GitCompare className="h-4 w-4 mr-1" />
-            {fromBranch} → {toBranch}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center text-sm text-gray-500">
+              <GitCompare className="h-4 w-4 mr-1" />
+              {fromBranch} → {toBranch}
+            </div>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh diff"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+            )}
           </div>
         </div>
       </div>
