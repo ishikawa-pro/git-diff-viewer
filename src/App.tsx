@@ -89,6 +89,18 @@ function App() {
     loadRepoHistory();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey && event.shiftKey && event.key === 'r') {
+        event.preventDefault();
+        handleGlobalRefresh();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fromBranch, toBranch]);
+
   const fetchDiff = async () => {
     if (!fromBranch || !toBranch) return;
 
