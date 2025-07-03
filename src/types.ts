@@ -21,14 +21,24 @@ export interface RepoInfo {
   isClean: boolean;
 }
 
+export interface RepoHistoryItem {
+  path: string;
+  name: string;
+  lastOpened: Date;
+}
+
 declare global {
   interface Window {
     electronAPI: {
       selectDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>;
+      initializeRepository: (repoPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
       getBranches: () => Promise<string[]>;
+      getDefaultBranch: () => Promise<string>;
       getDiff: (fromBranch: string, toBranch: string) => Promise<DiffData>;
       getFileDiff: (fromBranch: string, toBranch: string, filePath: string) => Promise<{ diff: string }>;
       getRepoInfo: () => Promise<RepoInfo | null>;
+      getRepoHistory: () => Promise<RepoHistoryItem[]>;
+      saveRepoHistory: (repoPath: string) => Promise<void>;
     };
   }
 } 

@@ -3,7 +3,7 @@ import RepositorySelector from './components/RepositorySelector';
 import BranchSelector from './components/BranchSelector';
 import DiffViewer from './components/DiffViewer';
 import FileTree from './components/FileTree';
-import { DiffData, FileChange, RepoInfo } from './types';
+import { DiffData, FileChange, RepoInfo, RepoHistoryItem } from './types';
 
 function App() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -15,21 +15,33 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
   const [fileDiffs, setFileDiffs] = useState<Record<string, string>>({});
+  const [repoHistory, setRepoHistory] = useState<RepoHistoryItem[]>([]);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const selectRepository = async () => {
+  const selectRepository = async (repoPath?: string) => {
     try {
-      const result = await window.electronAPI.selectDirectory();
+      let result;
+      if (repoPath) {
+        console.log('Initializing repository with path:', repoPath);
+        result = await window.electronAPI.initializeRepository(repoPath);
+      } else {
+        result = await window.electronAPI.selectDirectory();
+      }
+      
+      console.log('Repository selection result:', result);
+      
       if (result.success && result.path) {
         setSelectedRepo(result.path);
         await loadBranches();
         await loadRepoInfo();
+        await window.electronAPI.saveRepoHistory(result.path);
+        await loadRepoHistory();
       } else if (result.error) {
-        alert(result.error);
+        alert(`Repository error: ${result.error}`);
       }
     } catch (error) {
       console.error('Failed to select repository:', error);
-      alert('Failed to select repository');
+      alert(`Failed to select repository: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -37,6 +49,15 @@ function App() {
     try {
       const branchList = await window.electronAPI.getBranches();
       setBranches(branchList);
+      
+      try {
+        const defaultBranch = await window.electronAPI.getDefaultBranch();
+        if (defaultBranch && branchList.includes(defaultBranch)) {
+          setFromBranch(defaultBranch);
+        }
+      } catch (defaultBranchError) {
+        console.error('Failed to get default branch:', defaultBranchError);
+      }
     } catch (error) {
       console.error('Failed to load branches:', error);
     }
@@ -50,6 +71,19 @@ function App() {
       console.error('Failed to load repo info:', error);
     }
   };
+
+  const loadRepoHistory = async () => {
+    try {
+      const history = await window.electronAPI.getRepoHistory();
+      setRepoHistory(history);
+    } catch (error) {
+      console.error('Failed to load repo history:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadRepoHistory();
+  }, []);
 
   const fetchDiff = async () => {
     if (!fromBranch || !toBranch) return;
@@ -115,7 +149,7 @@ function App() {
 
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!selectedRepo ? (
-          <RepositorySelector onSelect={selectRepository} />
+          <RepositorySelector onSelect={() => selectRepository()} repoHistory={repoHistory} onSelectFromHistory={(repoPath: string) => selectRepository(repoPath)} />
         ) : (
           <>
             <BranchSelector
