@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import BranchSelector from './BranchSelector';
 import DiffViewer, { Comment } from './DiffViewer';
 import FileTree from './FileTree';
@@ -55,6 +55,7 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
   const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
   const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
+  const [previousDiffs, setPreviousDiffs] = useState<Record<string, string>>({});
 
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
@@ -81,6 +82,42 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
       [fileKey]: viewed
     }));
   };
+
+  // Check for changes in diff content and reset viewed/collapsed state if changed
+  useEffect(() => {
+    if (fileDiffs && Object.keys(fileDiffs).length > 0) {
+      const changedFiles: string[] = [];
+      
+      Object.entries(fileDiffs).forEach(([file, currentDiff]) => {
+        const previousDiff = previousDiffs[file];
+        if (previousDiff && previousDiff !== currentDiff) {
+          changedFiles.push(file);
+        }
+      });
+      
+      if (changedFiles.length > 0) {
+        // Reset viewed and collapsed state for changed files
+        setViewedFiles(prev => {
+          const updated = { ...prev };
+          changedFiles.forEach(file => {
+            delete updated[file];
+          });
+          return updated;
+        });
+        
+        setCollapsedFiles(prev => {
+          const updated = { ...prev };
+          changedFiles.forEach(file => {
+            delete updated[file];
+          });
+          return updated;
+        });
+      }
+      
+      // Update previous diffs
+      setPreviousDiffs(fileDiffs);
+    }
+  }, [fileDiffs, previousDiffs]);
 
   return (
     <div className="flex-1 flex flex-col">
@@ -123,6 +160,7 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
             onFromBranchChange={onFromBranchChange}
             onToBranchChange={onToBranchChange}
             onCompare={onCompare}
+            onRefresh={onRefresh}
           />
         </div>
       </div>

@@ -45,6 +45,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
   const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
+  const [previousDiffs, setPreviousDiffs] = useState<Record<string, { working: string; staged: string }>>({});
 
   useEffect(() => {
     if (!localDiffData && !loading) {
@@ -77,6 +78,47 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
       [fileKey]: viewed
     }));
   };
+
+  // Check for changes in diff content and reset viewed/collapsed state if changed
+  useEffect(() => {
+    if (localFileDiffs && Object.keys(localFileDiffs).length > 0) {
+      const changedFiles: string[] = [];
+      
+      Object.entries(localFileDiffs).forEach(([file, currentDiff]) => {
+        const previousDiff = previousDiffs[file];
+        if (previousDiff) {
+          if (previousDiff.working !== currentDiff.working) {
+            changedFiles.push(`${file}-working`);
+          }
+          if (previousDiff.staged !== currentDiff.staged) {
+            changedFiles.push(`${file}-staged`);
+          }
+        }
+      });
+      
+      if (changedFiles.length > 0) {
+        // Reset viewed and collapsed state for changed files
+        setViewedFiles(prev => {
+          const updated = { ...prev };
+          changedFiles.forEach(fileKey => {
+            delete updated[fileKey];
+          });
+          return updated;
+        });
+        
+        setCollapsedFiles(prev => {
+          const updated = { ...prev };
+          changedFiles.forEach(fileKey => {
+            delete updated[fileKey];
+          });
+          return updated;
+        });
+      }
+      
+      // Update previous diffs
+      setPreviousDiffs(localFileDiffs);
+    }
+  }, [localFileDiffs, previousDiffs]);
 
   const getTotalComments = () => {
     return Object.values(allComments).reduce((total, comments) => total + comments.length, 0);

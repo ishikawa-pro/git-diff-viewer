@@ -247,13 +247,21 @@ function App() {
   };
 
   const handleRefresh = async () => {
-    if (!fromBranch || !toBranch) return;
-
-    setIsRefreshing(true);
-    try {
-      await fetchDiff();
-    } finally {
-      setIsRefreshing(false);
+    if (currentView === 'local-changes') {
+      setIsRefreshing(true);
+      try {
+        await fetchLocalDiff();
+      } finally {
+        setIsRefreshing(false);
+      }
+    } else if (currentView === 'branch-compare') {
+      if (!fromBranch || !toBranch) return;
+      setIsRefreshing(true);
+      try {
+        await fetchDiff();
+      } finally {
+        setIsRefreshing(false);
+      }
     }
   };
 
