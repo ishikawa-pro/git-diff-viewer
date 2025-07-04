@@ -71,6 +71,8 @@ function App() {
         await loadRepoHistory();
         // リポジトリ選択後、ローカル変更ビューに切り替え
         setCurrentView('local-changes');
+        // サイドバーを隠す
+        setSidebarVisible(false);
       } else if (result.error) {
         alert(`Repository error: ${result.error}`);
       }
@@ -315,6 +317,14 @@ function App() {
     if (view !== 'local-changes') {
       setLocalDiffData(null);
     }
+    // Local Changes または Branch Compare ビューに切り替える時にサイドバーを隠す
+    if (view === 'local-changes' || view === 'branch-compare') {
+      setSidebarVisible(false);
+    }
+    // Repository 選択画面に戻る時はサイドバーを表示
+    if (view === 'repository-select') {
+      setSidebarVisible(true);
+    }
   };
 
   const backToRepositorySelection = () => {
@@ -329,6 +339,8 @@ function App() {
     setLocalDiffData(null);
     setLocalFileDiffs({});
     setCurrentView('repository-select');
+    // リポジトリ選択画面に戻る時はサイドバーを表示
+    setSidebarVisible(true);
   };
 
   const getDiffDataForSearch = useCallback(() => {
