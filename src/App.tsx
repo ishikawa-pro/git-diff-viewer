@@ -478,7 +478,7 @@ function App() {
         {currentView === 'repository-select' && (
           <div className="flex-1 flex flex-col">
             {/* Header */}
-            <div className="bg-white shadow-sm border-b px-6 py-4">
+            <div className="bg-white shadow-sm border-b px-6 py-4 sticky top-0 z-10">
               <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-gray-900">Select Repository</h1>
                 {selectedRepo && (
