@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { FileText, GitCompare, RefreshCw } from 'lucide-react';
+import { FileText, GitCompare, RefreshCw, Copy, Check } from 'lucide-react';
 
 interface DiffViewerProps {
   diff: string;
@@ -22,6 +22,17 @@ interface DiffLine {
 
 const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
   
   const getLanguage = (filename: string | null) => {
     if (!filename) return 'diff';
@@ -187,6 +198,19 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
             <h3 className="text-lg font-medium text-gray-900">
               {selectedFile ? `${selectedFile}` : 'Diff View'}
             </h3>
+            {selectedFile && (
+              <button
+                onClick={() => copyToClipboard(selectedFile)}
+                className="ml-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                title="Copy file path to clipboard"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center text-sm text-gray-500">
