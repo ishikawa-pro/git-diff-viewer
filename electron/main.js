@@ -564,4 +564,72 @@ ipcMain.handle('get-branch-history', async (event, repoPath) => {
     console.error('Failed to get branch history:', error);
     return null;
   }
+});
+
+ipcMain.handle('get-local-diff', async (event) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
+    throw new Error('No repository selected');
+  }
+  
+  try {
+    // Get working directory changes (unstaged changes)
+    const workingDiff = await windowData.git.diff();
+    
+    // Get staged changes
+    const stagedDiff = await windowData.git.diff(['--cached']);
+    
+    // Get diff summary for working directory
+    const workingDiffSummary = await windowData.git.diffSummary();
+    
+    // Get diff summary for staged changes
+    const stagedDiffSummary = await windowData.git.diffSummary(['--cached']);
+    
+    return {
+      workingDiff,
+      stagedDiff,
+      workingFiles: workingDiffSummary.files,
+      stagedFiles: stagedDiffSummary.files,
+      workingSummary: {
+        insertions: workingDiffSummary.insertions,
+        deletions: workingDiffSummary.deletions,
+        total: workingDiffSummary.total
+      },
+      stagedSummary: {
+        insertions: stagedDiffSummary.insertions,
+        deletions: stagedDiffSummary.deletions,
+        total: stagedDiffSummary.total
+      }
+    };
+  } catch (error) {
+    throw new Error(`Failed to get local diff: ${error.message}`);
+  }
+});
+
+ipcMain.handle('get-local-file-diff', async (event, filePath, isStaged = false) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.git) {
+    throw new Error('No repository selected');
+  }
+  
+  try {
+    let diff;
+    if (isStaged) {
+      // Get staged changes for specific file
+      diff = await windowData.git.diff(['--cached', '--', filePath]);
+    } else {
+      // Get working directory changes for specific file
+      diff = await windowData.git.diff(['--', filePath]);
+    }
+    
+    return { diff };
+  } catch (error) {
+    throw new Error(`Failed to get local file diff: ${error.message}`);
+  }
 }); 

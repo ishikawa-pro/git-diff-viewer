@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveRepoHistory: (repoPath) => ipcRenderer.invoke('save-repo-history', repoPath),
   saveBranchHistory: (repoPath, fromBranch, toBranch) => ipcRenderer.invoke('save-branch-history', repoPath, fromBranch, toBranch),
   getBranchHistory: (repoPath) => ipcRenderer.invoke('get-branch-history', repoPath),
+  getLocalDiff: () => ipcRenderer.invoke('get-local-diff'),
+  getLocalFileDiff: (filePath, isStaged) => ipcRenderer.invoke('get-local-file-diff', filePath, isStaged),
   
   // Event listener for CLI initialization
   onInitializeWithRepo: (callback) => ipcRenderer.on('initialize-with-repo', callback),

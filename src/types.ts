@@ -33,6 +33,23 @@ export interface BranchHistory {
   lastUsed: Date;
 }
 
+export interface LocalDiffData {
+  workingDiff: string;
+  stagedDiff: string;
+  workingFiles: FileChange[];
+  stagedFiles: FileChange[];
+  workingSummary: {
+    insertions: number;
+    deletions: number;
+    total: number;
+  };
+  stagedSummary: {
+    insertions: number;
+    deletions: number;
+    total: number;
+  };
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -47,6 +64,8 @@ declare global {
       saveRepoHistory: (repoPath: string) => Promise<void>;
       saveBranchHistory: (repoPath: string, fromBranch: string, toBranch: string) => Promise<void>;
       getBranchHistory: (repoPath: string) => Promise<BranchHistory | null>;
+      getLocalDiff: () => Promise<LocalDiffData>;
+      getLocalFileDiff: (filePath: string, isStaged: boolean) => Promise<{ diff: string }>;
       onInitializeWithRepo: (callback: (event: any, repoPath: string) => void) => void;
       removeInitializeWithRepoListener: (callback: (event: any, repoPath: string) => void) => void;
     };

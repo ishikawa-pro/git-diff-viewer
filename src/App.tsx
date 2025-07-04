@@ -4,7 +4,7 @@ import BranchSelector from './components/BranchSelector';
 import DiffViewer from './components/DiffViewer';
 import FileTree from './components/FileTree';
 import GlobalRefreshButton from './components/GlobalRefreshButton';
-import { DiffData, FileChange, RepoInfo, RepoHistoryItem } from './types';
+import { DiffData, FileChange, RepoInfo, RepoHistoryItem, LocalDiffData } from './types';
 import { ArrowLeft } from 'lucide-react';
 
 function App() {
@@ -21,6 +21,9 @@ function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isGlobalRefreshing, setIsGlobalRefreshing] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [localDiffData, setLocalDiffData] = useState<LocalDiffData | null>(null);
+  const [isLocalDiffMode, setIsLocalDiffMode] = useState(true);
+  const [localFileDiffs, setLocalFileDiffs] = useState<Record<string, { working: string; staged: string }>>({});
 
   const selectRepository = async (repoPath?: string) => {
     try {
@@ -31,9 +34,9 @@ function App() {
       } else {
         result = await window.electronAPI.selectDirectory();
       }
-      
+
       console.log('Repository selection result:', result);
-      
+
       if (result.success && result.path) {
         setSelectedRepo(result.path);
         await loadBranchesForRepo(result.path);
@@ -53,10 +56,10 @@ function App() {
     try {
       const branchList = await window.electronAPI.getBranches();
       setBranches(branchList);
-      
+
       let restoredFromBranch = '';
       let restoredToBranch = '';
-      
+
       try {
         const branchHistory = await window.electronAPI.getBranchHistory(repoPath);
         console.log('Branch history for repo:', repoPath, branchHistory);
@@ -77,7 +80,7 @@ function App() {
       } catch (branchHistoryError) {
         console.error('Failed to get branch history:', branchHistoryError);
       }
-      
+
       if (!restoredFromBranch) {
         try {
           const defaultBranch = await window.electronAPI.getDefaultBranch();
@@ -118,15 +121,15 @@ function App() {
 
   useEffect(() => {
     loadRepoHistory();
-    
+
     // Listen for CLI initialization
     const handleInitializeWithRepo = (_event: any, repoPath: string) => {
       console.log('Received initialize-with-repo event with path:', repoPath);
       selectRepository(repoPath);
     };
-    
+
     window.electronAPI.onInitializeWithRepo(handleInitializeWithRepo);
-    
+
     return () => {
       window.electronAPI.removeInitializeWithRepoListener(handleInitializeWithRepo);
     };
@@ -152,7 +155,7 @@ function App() {
       const data = await window.electronAPI.getDiff(fromBranch, toBranch);
       setDiffData(data);
       setSelectedFile(null);
-      
+
       if (selectedRepo) {
         try {
           await window.electronAPI.saveBranchHistory(selectedRepo, fromBranch, toBranch);
@@ -161,7 +164,7 @@ function App() {
           console.error('Failed to save branch history:', error);
         }
       }
-      
+
       // 各ファイルの個別diffを取得
       const diffs: Record<string, string> = {};
       for (const file of data.files) {
@@ -187,8 +190,8 @@ function App() {
     // 選択されたファイルのコンポーネントまでスクロール
     const fileRef = fileRefs.current[file];
     if (fileRef) {
-      fileRef.scrollIntoView({ 
-        behavior: 'smooth', 
+      fileRef.scrollIntoView({
+        behavior: 'smooth',
         block: 'start',
         inline: 'nearest'
       });
@@ -197,7 +200,7 @@ function App() {
 
   const handleRefresh = async () => {
     if (!fromBranch || !toBranch) return;
-    
+
     setIsRefreshing(true);
     try {
       await fetchDiff();
@@ -207,15 +210,61 @@ function App() {
   };
 
   const handleGlobalRefresh = async () => {
-    if (!fromBranch || !toBranch) return;
-    
     setIsGlobalRefreshing(true);
     try {
       await loadRepoInfo();
-      await fetchDiff();
+      if (isLocalDiffMode) {
+        await fetchLocalDiff();
+      } else if (fromBranch && toBranch) {
+        await fetchDiff();
+      }
     } finally {
       setIsGlobalRefreshing(false);
     }
+  };
+
+  const fetchLocalDiff = async () => {
+    setLoading(true);
+    try {
+      const data = await window.electronAPI.getLocalDiff();
+      setLocalDiffData(data);
+      setSelectedFile(null);
+
+      // 各ファイルの個別ローカル差分を取得
+      const diffs: Record<string, { working: string; staged: string }> = {};
+      const allFiles = new Set([...data.workingFiles.map(f => f.file), ...data.stagedFiles.map(f => f.file)]);
+
+      for (const file of allFiles) {
+        try {
+          const [workingResult, stagedResult] = await Promise.all([
+            window.electronAPI.getLocalFileDiff(file, false),
+            window.electronAPI.getLocalFileDiff(file, true)
+          ]);
+          diffs[file] = {
+            working: workingResult.diff,
+            staged: stagedResult.diff
+          };
+        } catch (error) {
+          console.error(`Failed to fetch local diff for ${file}:`, error);
+          diffs[file] = { working: '', staged: '' };
+        }
+      }
+      setLocalFileDiffs(diffs);
+    } catch (error) {
+      console.error('Failed to fetch local diff:', error);
+      alert(`Failed to fetch local diff: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleLocalDiffMode = () => {
+    setIsLocalDiffMode(!isLocalDiffMode);
+    setDiffData(null);
+    setLocalDiffData(null);
+    setSelectedFile(null);
+    setFileDiffs({});
+    setLocalFileDiffs({});
   };
 
   const backToRepositorySelection = () => {
@@ -227,6 +276,9 @@ function App() {
     setSelectedFile(null);
     setRepoInfo(null);
     setFileDiffs({});
+    setLocalDiffData(null);
+    setIsLocalDiffMode(false);
+    setLocalFileDiffs({});
   };
 
   return (
@@ -266,20 +318,45 @@ function App() {
         ) : (
           <>
             <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <BranchSelector
-                  branches={branches}
-                  fromBranch={fromBranch}
-                  toBranch={toBranch}
-                  onFromBranchChange={setFromBranch}
-                  onToBranchChange={setToBranch}
-                  onCompare={fetchDiff}
-                />
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={toggleLocalDiffMode}
+                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                    isLocalDiffMode
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {isLocalDiffMode ? 'Local Changes' : 'Branch Compare'}
+                </button>
+                {isLocalDiffMode && (
+                  <button
+                    onClick={fetchLocalDiff}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loading ? 'Loading...' : 'Show Local Changes'}
+                  </button>
+                )}
               </div>
+
+              {!isLocalDiffMode && (
+                <div className="flex-1">
+                  <BranchSelector
+                    branches={branches}
+                    fromBranch={fromBranch}
+                    toBranch={toBranch}
+                    onFromBranchChange={setFromBranch}
+                    onToBranchChange={setToBranch}
+                    onCompare={fetchDiff}
+                  />
+                </div>
+              )}
+
               <GlobalRefreshButton
                 onRefresh={handleGlobalRefresh}
                 isRefreshing={isGlobalRefreshing}
-                disabled={!fromBranch || !toBranch}
+                disabled={isLocalDiffMode ? false : (!fromBranch || !toBranch)}
               />
             </div>
 
@@ -289,7 +366,7 @@ function App() {
               </div>
             )}
 
-            {diffData && (
+            {diffData && !isLocalDiffMode && (
               <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-1">
                   <FileTree
@@ -307,8 +384,8 @@ function App() {
                           fileRefs.current[file.file] = el;
                         }}
                         className={`transition-all duration-300 ${
-                          selectedFile === file.file 
-                            ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg' 
+                          selectedFile === file.file
+                            ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg'
                             : ''
                         }`}
                       >
@@ -327,6 +404,66 @@ function App() {
                 </div>
               </div>
             )}
+
+            {localDiffData && isLocalDiffMode && (
+              <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-1">
+                  <FileTree
+                    files={[...localDiffData.workingFiles, ...localDiffData.stagedFiles]}
+                    onFileSelect={handleFileSelect}
+                    selectedFile={selectedFile}
+                  />
+                </div>
+                <div className="lg:col-span-4">
+                  <div className="space-y-6">
+                    {Array.from(new Set([...localDiffData.workingFiles.map(f => f.file), ...localDiffData.stagedFiles.map(f => f.file)])).map((file) => (
+                      <div
+                        key={file}
+                        ref={(el) => {
+                          fileRefs.current[file] = el;
+                        }}
+                        className={`transition-all duration-300 ${
+                          selectedFile === file
+                            ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg'
+                            : ''
+                        }`}
+                      >
+                        <div className="space-y-4">
+                          {localFileDiffs[file]?.working && (
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">Working Directory Changes</h3>
+                              <DiffViewer
+                                diff={localFileDiffs[file].working}
+                                selectedFile={file}
+                                fromBranch="HEAD"
+                                toBranch="Working Directory"
+                                isSelected={selectedFile === file}
+                                onRefresh={handleRefresh}
+                                isRefreshing={isRefreshing}
+                              />
+                            </div>
+                          )}
+                          {localFileDiffs[file]?.staged && (
+                            <div>
+                              <h3 className="text-lg font-semibold text-gray-900 mb-2">Staged Changes</h3>
+                              <DiffViewer
+                                diff={localFileDiffs[file].staged}
+                                selectedFile={file}
+                                fromBranch="HEAD"
+                                toBranch="Staged"
+                                isSelected={selectedFile === file}
+                                onRefresh={handleRefresh}
+                                isRefreshing={isRefreshing}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -334,4 +471,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
