@@ -48,6 +48,9 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
   const [commentText, setCommentText] = useState('');
   const [showCommentForm, setShowCommentForm] = useState(false);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [dragStart, setDragStart] = useState<number | null>(null);
+  const [dragEnd, setDragEnd] = useState<number | null>(null);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -60,16 +63,53 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
   };
 
   const handleLineClick = (lineIndex: number) => {
-    if (selectionStart === null) {
-      setSelectionStart(lineIndex);
-    } else {
-      const start = Math.min(selectionStart, lineIndex);
-      const end = Math.max(selectionStart, lineIndex);
-      setSelectedLineRange({ start, end });
-      setShowCommentForm(true);
-      setSelectionStart(null);
+    // 単クリックで1行選択
+    setSelectedLineRange({ start: lineIndex, end: lineIndex });
+    setShowCommentForm(true);
+    setSelectionStart(null);
+  };
+
+  const handleMouseDown = (lineIndex: number, event: React.MouseEvent) => {
+    event.preventDefault();
+    setDragStart(lineIndex);
+    setDragEnd(lineIndex);
+    setIsSelecting(true);
+  };
+
+  const handleMouseEnter = (lineIndex: number) => {
+    if (isSelecting && dragStart !== null) {
+      setDragEnd(lineIndex);
     }
   };
+
+  const handleMouseUp = () => {
+    if (isSelecting && dragStart !== null && dragEnd !== null) {
+      const start = Math.min(dragStart, dragEnd);
+      const end = Math.max(dragStart, dragEnd);
+      
+      // ドラッグで複数行選択された場合のみ範囲を設定
+      if (start !== end) {
+        setSelectedLineRange({ start, end });
+        setShowCommentForm(true);
+      }
+    }
+    setIsSelecting(false);
+    setDragStart(null);
+    setDragEnd(null);
+  };
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsSelecting(false);
+      setDragStart(null);
+      setDragEnd(null);
+    };
+
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, []);
 
   const addComment = () => {
     if (!commentText.trim() || !selectedLineRange) return;
@@ -220,6 +260,8 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
 
   const renderDiffLine = (line: DiffLine, index: number) => {
     const isSelected = selectedLineRange && index >= selectedLineRange.start && index <= selectedLineRange.end;
+    const isDragSelecting = isSelecting && dragStart !== null && dragEnd !== null && 
+                           index >= Math.min(dragStart, dragEnd) && index <= Math.max(dragStart, dragEnd);
     const hasComment = comments.some(c => index >= c.lineRange.start && index <= c.lineRange.end);
     const isSearchMatch = searchTerm && line.content.toLowerCase().includes(searchTerm.toLowerCase());
     const isCurrentSearchMatch = currentSearchLineIndex === index;
@@ -233,33 +275,51 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
     
     const getLineClass = (type: string) => {
       let baseClass = '';
+      let backgroundClass = '';
+      let borderClass = '';
+      
+      // Base styling based on line type
       switch (type) {
         case 'added':
-          baseClass = 'bg-green-50 border-l-4 border-green-400';
+          backgroundClass = 'bg-green-50';
+          borderClass = 'border-l-4 border-green-400';
           break;
         case 'removed':
-          baseClass = 'bg-red-50 border-l-4 border-red-400';
+          backgroundClass = 'bg-red-50';
+          borderClass = 'border-l-4 border-red-400';
           break;
         case 'hunk':
-          baseClass = 'bg-blue-50 border-l-4 border-blue-400 font-semibold text-blue-800';
+          backgroundClass = 'bg-blue-50';
+          borderClass = 'border-l-4 border-blue-400';
+          baseClass = 'font-semibold text-blue-800';
           break;
         default:
-          baseClass = 'bg-white';
+          backgroundClass = 'bg-white';
       }
       
+      // Selection highlighting takes priority
       if (isSelected) {
-        baseClass += ' bg-yellow-100 border-yellow-500';
+        backgroundClass = 'bg-yellow-100 !important';
+        baseClass += ' ring-2 ring-yellow-400 border-yellow-400';
+      } else if (isDragSelecting) {
+        backgroundClass = 'bg-yellow-50 !important';
+        baseClass += ' ring-1 ring-yellow-300 border-yellow-300';
       }
+      
+      // Search highlighting
+      if (isCurrentSearchMatch) {
+        backgroundClass = 'bg-orange-200';
+        baseClass += ' ring-2 ring-orange-500';
+      } else if (isSearchMatch) {
+        backgroundClass = 'bg-yellow-100';
+        baseClass += ' ring-1 ring-yellow-400';
+      }
+      
       if (hasComment) {
         baseClass += ' border-r-4 border-r-blue-400';
       }
-      if (isCurrentSearchMatch) {
-        baseClass += ' ring-2 ring-orange-500 bg-orange-50';
-      } else if (isSearchMatch) {
-        baseClass += ' ring-1 ring-yellow-400 bg-yellow-50';
-      }
       
-      return baseClass;
+      return `${backgroundClass} ${borderClass} ${baseClass}`;
     };
 
     const getLinePrefix = (type: string) => {
@@ -288,15 +348,22 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
     return (
       <div key={index} data-line-index={index}>
         <div 
-          className={`flex ${getLineClass(line.type)} cursor-pointer hover:bg-gray-50`}
+          className={`flex ${getLineClass(line.type)} cursor-pointer hover:bg-gray-50 select-none`}
           onClick={() => handleLineClick(index)}
+          onMouseDown={(e) => handleMouseDown(index, e)}
+          onMouseEnter={() => handleMouseEnter(index)}
+          onMouseUp={handleMouseUp}
         >
-          <div className="flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r bg-gray-50 font-mono">
+          <div className={`flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r font-mono ${
+            isSelected ? 'bg-yellow-100' : isDragSelecting ? 'bg-yellow-50' : 'bg-gray-50'
+          }`}>
             <span className="block">
               {line.type === 'removed' || line.type === 'context' ? line.oldLineNumber : ''}
             </span>
           </div>
-          <div className="flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r bg-gray-50 font-mono">
+          <div className={`flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r font-mono ${
+            isSelected ? 'bg-yellow-100' : isDragSelecting ? 'bg-yellow-50' : 'bg-gray-50'
+          }`}>
             <span className="block">
               {line.type === 'added' || line.type === 'context' ? line.newLineNumber : ''}
             </span>
@@ -522,10 +589,11 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
         </div>
       )}
       
-      {selectionStart !== null && (
-        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+      
+      {isSelecting && dragStart !== null && dragEnd !== null && (
+        <div className="fixed bottom-4 right-4 bg-yellow-600 text-white px-4 py-2 rounded-lg shadow-lg">
           <p className="text-sm">
-            Click another line to select range (starting from line {selectionStart + 1})
+            Selected lines {Math.min(dragStart, dragEnd) + 1} - {Math.max(dragStart, dragEnd) + 1}
           </p>
         </div>
       )}
