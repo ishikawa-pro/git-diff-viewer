@@ -53,6 +53,8 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
 }) => {
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
+  const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
+  const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
 
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
@@ -63,6 +65,20 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
     setAllComments(prev => ({
       ...prev,
       [fileKey]: comments
+    }));
+  };
+
+  const handleToggleCollapse = (fileKey: string) => {
+    setCollapsedFiles(prev => ({
+      ...prev,
+      [fileKey]: !prev[fileKey]
+    }));
+  };
+
+  const handleViewedChange = (fileKey: string, viewed: boolean) => {
+    setViewedFiles(prev => ({
+      ...prev,
+      [fileKey]: viewed
     }));
   };
 
@@ -154,6 +170,10 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
                     currentSearchLineIndex={selectedFile === file.file ? currentSearchLineIndex : -1}
                     currentSearchGlobalIndex={selectedFile === file.file ? currentSearchGlobalIndex : -1}
                     onCommentsChange={(comments) => handleCommentsChange(file.file, comments)}
+                    isCollapsed={collapsedFiles[file.file] || false}
+                    onToggleCollapse={() => handleToggleCollapse(file.file)}
+                    isViewed={viewedFiles[file.file] || false}
+                    onViewedChange={(viewed) => handleViewedChange(file.file, viewed)}
                   />
                 </div>
               ))}

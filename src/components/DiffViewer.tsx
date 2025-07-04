@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { FileText, GitCompare, RefreshCw, Copy, Check, MessageCircle, X } from 'lucide-react';
+import { FileText, GitCompare, RefreshCw, Copy, Check, MessageCircle, X, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface DiffViewerProps {
   diff: string;
@@ -15,6 +15,10 @@ interface DiffViewerProps {
   currentSearchLineIndex?: number;
   currentSearchGlobalIndex?: number;
   onCommentsChange?: (comments: Comment[]) => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  isViewed?: boolean;
+  onViewedChange?: (viewed: boolean) => void;
 }
 
 interface DiffLine {
@@ -36,7 +40,7 @@ export interface Comment {
   fileName?: string;
 }
 
-const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1, onCommentsChange }) => {
+const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1, onCommentsChange, isCollapsed = false, onToggleCollapse, isViewed = false, onViewedChange }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -126,6 +130,15 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
     setSelectedLineRange(null);
     setCommentText('');
     setSelectionStart(null);
+  };
+
+  const handleViewedChange = (checked: boolean) => {
+    if (onViewedChange) {
+      onViewedChange(checked);
+    }
+    if (onToggleCollapse) {
+      onToggleCollapse();
+    }
   };
   
   const getLanguage = (filename: string | null) => {
@@ -392,6 +405,19 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors mr-3"
+                title={isCollapsed ? 'Expand diff' : 'Collapse diff'}
+              >
+                {isCollapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </button>
+            )}
             <FileText className="h-5 w-5 text-gray-500 mr-2" />
             <h3 className="text-lg font-medium text-gray-900">
               {selectedFile ? `${selectedFile}` : 'Diff View'}
@@ -415,6 +441,17 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
               <GitCompare className="h-4 w-4 mr-1" />
               {fromBranch} → {toBranch}
             </div>
+            {onViewedChange && (
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isViewed}
+                  onChange={(e) => handleViewedChange(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                />
+                <span>Viewed</span>
+              </label>
+            )}
             {onRefresh && (
               <button
                 onClick={onRefresh}
@@ -430,17 +467,19 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
         </div>
       </div>
       
-      <div className="overflow-x-auto overflow-y-auto" ref={diffContainerRef}>
-        <div className="font-mono text-sm">
-          {parsedDiff.length > 0 ? (
-            parsedDiff.map((line, index) => renderDiffLine(line, index))
-          ) : (
-            <div className="px-4 py-8 text-center text-gray-500">
-              No changes found for this file
-            </div>
-          )}
+      {!isCollapsed && (
+        <div className="overflow-x-auto overflow-y-auto" ref={diffContainerRef}>
+          <div className="font-mono text-sm">
+            {parsedDiff.length > 0 ? (
+              parsedDiff.map((line, index) => renderDiffLine(line, index))
+            ) : (
+              <div className="px-4 py-8 text-center text-gray-500">
+                No changes found for this file
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       
       {showCommentForm && selectedLineRange && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

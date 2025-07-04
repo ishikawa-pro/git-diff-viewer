@@ -43,6 +43,8 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   const [showOnlyStaged, setShowOnlyStaged] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
+  const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
+  const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!localDiffData && !loading) {
@@ -59,6 +61,20 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
     setAllComments(prev => ({
       ...prev,
       [fileKey]: comments
+    }));
+  };
+
+  const handleToggleCollapse = (fileKey: string) => {
+    setCollapsedFiles(prev => ({
+      ...prev,
+      [fileKey]: !prev[fileKey]
+    }));
+  };
+
+  const handleViewedChange = (fileKey: string, viewed: boolean) => {
+    setViewedFiles(prev => ({
+      ...prev,
+      [fileKey]: viewed
     }));
   };
 
@@ -164,6 +180,10 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                             currentSearchLineIndex={selectedFile === file ? currentSearchLineIndex : -1}
                             currentSearchGlobalIndex={selectedFile === file ? currentSearchGlobalIndex : -1}
                             onCommentsChange={(comments) => handleCommentsChange(`${file}-working`, comments)}
+                            isCollapsed={collapsedFiles[`${file}-working`] || false}
+                            onToggleCollapse={() => handleToggleCollapse(`${file}-working`)}
+                            isViewed={viewedFiles[`${file}-working`] || false}
+                            onViewedChange={(viewed) => handleViewedChange(`${file}-working`, viewed)}
                           />
                         </div>
                       )}
@@ -182,6 +202,10 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                             currentSearchLineIndex={selectedFile === file ? currentSearchLineIndex : -1}
                             currentSearchGlobalIndex={selectedFile === file ? currentSearchGlobalIndex : -1}
                             onCommentsChange={(comments) => handleCommentsChange(`${file}-staged`, comments)}
+                            isCollapsed={collapsedFiles[`${file}-staged`] || false}
+                            onToggleCollapse={() => handleToggleCollapse(`${file}-staged`)}
+                            isViewed={viewedFiles[`${file}-staged`] || false}
+                            onViewedChange={(viewed) => handleViewedChange(`${file}-staged`, viewed)}
                           />
                         </div>
                       )}
