@@ -26,16 +26,10 @@
   },
   "win": {
     "target": "nsis",
-    "icon": "logo.png",
-    "binaries": [
-      "cli.js"
-    ]
+    "icon": "logo.png"
   },
   "linux": {
     "target": "AppImage",
-    "icon": "logo.png",
-    "binaries": [
-      "cli.js"
-    ]
+    "icon": "logo.png"
   }
 } 
