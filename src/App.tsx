@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import RepositorySelector from './components/RepositorySelector';
-import BranchSelector from './components/BranchSelector';
-import DiffViewer from './components/DiffViewer';
-import FileTree from './components/FileTree';
-import GlobalRefreshButton from './components/GlobalRefreshButton';
+import BranchCompareView from './components/BranchCompareView';
+import LocalChangesView from './components/LocalChangesView';
+import GlobalSidebar, { ViewMode } from './components/GlobalSidebar';
 import { DiffData, FileChange, RepoInfo, RepoHistoryItem, LocalDiffData } from './types';
 import { ArrowLeft } from 'lucide-react';
 
@@ -22,9 +21,8 @@ function App() {
   const [isGlobalRefreshing, setIsGlobalRefreshing] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [localDiffData, setLocalDiffData] = useState<LocalDiffData | null>(null);
-  const [isLocalDiffMode, setIsLocalDiffMode] = useState(true);
   const [localFileDiffs, setLocalFileDiffs] = useState<Record<string, { working: string; staged: string }>>({});
-  const [showOnlyStaged, setShowOnlyStaged] = useState(false);
+  const [currentView, setCurrentView] = useState<ViewMode>('repository-select');
 
   const selectRepository = async (repoPath?: string) => {
     try {
@@ -44,6 +42,8 @@ function App() {
         await loadRepoInfo();
         await window.electronAPI.saveRepoHistory(result.path);
         await loadRepoHistory();
+        // リポジトリ選択後、ブランチ比較ビューに切り替え
+        setCurrentView('branch-compare');
       } else if (result.error) {
         alert(`Repository error: ${result.error}`);
       }
@@ -214,9 +214,9 @@ function App() {
     setIsGlobalRefreshing(true);
     try {
       await loadRepoInfo();
-      if (isLocalDiffMode) {
+      if (currentView === 'local-changes') {
         await fetchLocalDiff();
-      } else if (fromBranch && toBranch) {
+      } else if (currentView === 'branch-compare' && fromBranch && toBranch) {
         await fetchDiff();
       }
     } finally {
@@ -259,13 +259,17 @@ function App() {
     }
   };
 
-  const toggleLocalDiffMode = () => {
-    setIsLocalDiffMode(!isLocalDiffMode);
-    setDiffData(null);
-    setLocalDiffData(null);
+  const handleViewChange = (view: ViewMode) => {
+    setCurrentView(view);
+    // ビュー切り替え時に選択されたファイルをリセット
     setSelectedFile(null);
-    setFileDiffs({});
-    setLocalFileDiffs({});
+    // 必要に応じて他の状態もリセット
+    if (view !== 'branch-compare') {
+      setDiffData(null);
+    }
+    if (view !== 'local-changes') {
+      setLocalDiffData(null);
+    }
   };
 
   const backToRepositorySelection = () => {
@@ -278,215 +282,114 @@ function App() {
     setRepoInfo(null);
     setFileDiffs({});
     setLocalDiffData(null);
-    setIsLocalDiffMode(false);
     setLocalFileDiffs({});
-    setShowOnlyStaged(false);
+    setCurrentView('repository-select');
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Global Sidebar */}
+      <GlobalSidebar
+        currentView={currentView}
+        onViewChange={handleViewChange}
+        selectedRepo={selectedRepo}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        {currentView === 'repository-select' && (
+          <div className="flex-1 flex flex-col">
+            {/* Header */}
+            <div className="bg-white shadow-sm border-b px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-gray-900">Select Repository</h1>
+                {selectedRepo && (
+                  <button
+                    onClick={backToRepositorySelection}
+                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Reset repository selection"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+                )}
+              </div>
               {selectedRepo && (
-                <button
-                  onClick={backToRepositorySelection}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                  title="Back to repository selection"
-                >
-                  <ArrowLeft size={20} />
-                </button>
-              )}
-              <h1 className="text-3xl font-bold text-gray-900">Git Diff Viewer</h1>
-            </div>
-            {selectedRepo && (
-              <div className="text-sm text-gray-500">
-                Repository: {selectedRepo.split('/').pop()}
-                {repoInfo && (
-                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
-                    {repoInfo.currentBranch}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!selectedRepo ? (
-          <RepositorySelector onSelect={() => selectRepository()} repoHistory={repoHistory} onSelectFromHistory={(repoPath: string) => selectRepository(repoPath)} />
-        ) : (
-          <>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={toggleLocalDiffMode}
-                  className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                    isLocalDiffMode
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {isLocalDiffMode ? 'Local Changes' : 'Branch Compare'}
-                </button>
-                {isLocalDiffMode && (
-                  <>
-                    <button
-                      onClick={fetchLocalDiff}
-                      disabled={loading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {loading ? 'Loading...' : 'Show Local Changes'}
-                    </button>
-                    <button
-                      onClick={() => setShowOnlyStaged(!showOnlyStaged)}
-                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        showOnlyStaged 
-                          ? 'bg-purple-600 text-white hover:bg-purple-700' 
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      {showOnlyStaged ? 'Staged Only' : 'All Changes'}
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {!isLocalDiffMode && (
-                <div className="flex-1">
-                  <BranchSelector
-                    branches={branches}
-                    fromBranch={fromBranch}
-                    toBranch={toBranch}
-                    onFromBranchChange={setFromBranch}
-                    onToBranchChange={setToBranch}
-                    onCompare={fetchDiff}
-                  />
+                <div className="text-sm text-gray-500 mt-2">
+                  Current: {selectedRepo.split('/').pop()}
+                  {repoInfo && (
+                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                      {repoInfo.currentBranch}
+                    </span>
+                  )}
                 </div>
               )}
-
-              <GlobalRefreshButton
-                onRefresh={handleGlobalRefresh}
-                isRefreshing={isGlobalRefreshing}
-                disabled={isLocalDiffMode ? false : (!fromBranch || !toBranch)}
+            </div>
+            
+            {/* Repository Selector */}
+            <div className="flex-1 p-6">
+              <RepositorySelector 
+                onSelect={() => selectRepository()} 
+                repoHistory={repoHistory} 
+                onSelectFromHistory={(repoPath: string) => selectRepository(repoPath)} 
               />
             </div>
+          </div>
+        )}
 
-            {loading && (
-              <div className="flex justify-center items-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            )}
+        {currentView === 'branch-compare' && selectedRepo && (
+          <BranchCompareView
+            branches={branches}
+            fromBranch={fromBranch}
+            toBranch={toBranch}
+            diffData={diffData}
+            fileDiffs={fileDiffs}
+            selectedFile={selectedFile}
+            loading={loading}
+            isRefreshing={isRefreshing}
+            isGlobalRefreshing={isGlobalRefreshing}
+            onFromBranchChange={setFromBranch}
+            onToBranchChange={setToBranch}
+            onCompare={fetchDiff}
+            onFileSelect={setSelectedFile}
+            onRefresh={handleRefresh}
+            onGlobalRefresh={handleGlobalRefresh}
+          />
+        )}
 
-            {diffData && !isLocalDiffMode && (
-              <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className="lg:col-span-1">
-                  <FileTree
-                    files={diffData.files}
-                    onFileSelect={handleFileSelect}
-                    selectedFile={selectedFile}
-                  />
-                </div>
-                <div className="lg:col-span-4">
-                  <div className="space-y-6">
-                    {diffData.files.map((file) => (
-                      <div
-                        key={file.file}
-                        ref={(el) => {
-                          fileRefs.current[file.file] = el;
-                        }}
-                        className={`transition-all duration-300 ${
-                          selectedFile === file.file
-                            ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg'
-                            : ''
-                        }`}
-                      >
-                        <DiffViewer
-                          diff={fileDiffs[file.file] || ''}
-                          selectedFile={file.file}
-                          fromBranch={fromBranch}
-                          toBranch={toBranch}
-                          isSelected={selectedFile === file.file}
-                          onRefresh={handleRefresh}
-                          isRefreshing={isRefreshing}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+        {currentView === 'local-changes' && selectedRepo && (
+          <LocalChangesView
+            localDiffData={localDiffData}
+            localFileDiffs={localFileDiffs}
+            selectedFile={selectedFile}
+            loading={loading}
+            isRefreshing={isRefreshing}
+            isGlobalRefreshing={isGlobalRefreshing}
+            onFetchLocalDiff={fetchLocalDiff}
+            onFileSelect={setSelectedFile}
+            onRefresh={handleRefresh}
+            onGlobalRefresh={handleGlobalRefresh}
+          />
+        )}
 
-            {localDiffData && isLocalDiffMode && (
-              <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div className="lg:col-span-1">
-                  <FileTree
-                    files={showOnlyStaged ? localDiffData.stagedFiles : [...localDiffData.workingFiles, ...localDiffData.stagedFiles]}
-                    onFileSelect={handleFileSelect}
-                    selectedFile={selectedFile}
-                  />
-                </div>
-                <div className="lg:col-span-4">
-                  <div className="space-y-6">
-                    {(() => {
-                      const allFiles = showOnlyStaged 
-                        ? localDiffData.stagedFiles.map(f => f.file)
-                        : Array.from(new Set([...localDiffData.workingFiles.map(f => f.file), ...localDiffData.stagedFiles.map(f => f.file)]));
-                      
-                      return allFiles.map((file) => (
-                        <div
-                          key={file}
-                          ref={(el) => {
-                            fileRefs.current[file] = el;
-                          }}
-                          className={`transition-all duration-300 ${
-                            selectedFile === file
-                              ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg'
-                              : ''
-                          }`}
-                        >
-                          <div className="space-y-4">
-                            {!showOnlyStaged && localFileDiffs[file]?.working && (
-                              <div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Working Directory Changes</h3>
-                                <DiffViewer
-                                  diff={localFileDiffs[file].working}
-                                  selectedFile={file}
-                                  fromBranch="HEAD"
-                                  toBranch="Working Directory"
-                                  isSelected={selectedFile === file}
-                                  onRefresh={handleRefresh}
-                                  isRefreshing={isRefreshing}
-                                />
-                              </div>
-                            )}
-                            {localFileDiffs[file]?.staged && (
-                              <div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                  {showOnlyStaged ? 'Staged Changes' : 'Staged Changes'}
-                                </h3>
-                                <DiffViewer
-                                  diff={localFileDiffs[file].staged}
-                                  selectedFile={file}
-                                  fromBranch="HEAD"
-                                  toBranch="Staged"
-                                  isSelected={selectedFile === file}
-                                  onRefresh={handleRefresh}
-                                  isRefreshing={isRefreshing}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
+        {/* Fallback: Repository not selected */}
+        {(currentView === 'branch-compare' || currentView === 'local-changes') && !selectedRepo && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-gray-400 mb-4">
+                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7z" />
+                </svg>
               </div>
-            )}
-          </>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No repository selected</h3>
+              <p className="text-gray-500 mb-4">Please select a repository from the sidebar to continue</p>
+              <button
+                onClick={() => setCurrentView('repository-select')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Select Repository
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
