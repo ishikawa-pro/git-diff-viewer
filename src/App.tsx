@@ -24,6 +24,7 @@ function App() {
   const [localDiffData, setLocalDiffData] = useState<LocalDiffData | null>(null);
   const [isLocalDiffMode, setIsLocalDiffMode] = useState(true);
   const [localFileDiffs, setLocalFileDiffs] = useState<Record<string, { working: string; staged: string }>>({});
+  const [showOnlyStaged, setShowOnlyStaged] = useState(false);
 
   const selectRepository = async (repoPath?: string) => {
     try {
@@ -279,6 +280,7 @@ function App() {
     setLocalDiffData(null);
     setIsLocalDiffMode(false);
     setLocalFileDiffs({});
+    setShowOnlyStaged(false);
   };
 
   return (
@@ -330,13 +332,25 @@ function App() {
                   {isLocalDiffMode ? 'Local Changes' : 'Branch Compare'}
                 </button>
                 {isLocalDiffMode && (
-                  <button
-                    onClick={fetchLocalDiff}
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {loading ? 'Loading...' : 'Show Local Changes'}
-                  </button>
+                  <>
+                    <button
+                      onClick={fetchLocalDiff}
+                      disabled={loading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {loading ? 'Loading...' : 'Show Local Changes'}
+                    </button>
+                    <button
+                      onClick={() => setShowOnlyStaged(!showOnlyStaged)}
+                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        showOnlyStaged 
+                          ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {showOnlyStaged ? 'Staged Only' : 'All Changes'}
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -409,57 +423,65 @@ function App() {
               <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-1">
                   <FileTree
-                    files={[...localDiffData.workingFiles, ...localDiffData.stagedFiles]}
+                    files={showOnlyStaged ? localDiffData.stagedFiles : [...localDiffData.workingFiles, ...localDiffData.stagedFiles]}
                     onFileSelect={handleFileSelect}
                     selectedFile={selectedFile}
                   />
                 </div>
                 <div className="lg:col-span-4">
                   <div className="space-y-6">
-                    {Array.from(new Set([...localDiffData.workingFiles.map(f => f.file), ...localDiffData.stagedFiles.map(f => f.file)])).map((file) => (
-                      <div
-                        key={file}
-                        ref={(el) => {
-                          fileRefs.current[file] = el;
-                        }}
-                        className={`transition-all duration-300 ${
-                          selectedFile === file
-                            ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg'
-                            : ''
-                        }`}
-                      >
-                        <div className="space-y-4">
-                          {localFileDiffs[file]?.working && (
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">Working Directory Changes</h3>
-                              <DiffViewer
-                                diff={localFileDiffs[file].working}
-                                selectedFile={file}
-                                fromBranch="HEAD"
-                                toBranch="Working Directory"
-                                isSelected={selectedFile === file}
-                                onRefresh={handleRefresh}
-                                isRefreshing={isRefreshing}
-                              />
-                            </div>
-                          )}
-                          {localFileDiffs[file]?.staged && (
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">Staged Changes</h3>
-                              <DiffViewer
-                                diff={localFileDiffs[file].staged}
-                                selectedFile={file}
-                                fromBranch="HEAD"
-                                toBranch="Staged"
-                                isSelected={selectedFile === file}
-                                onRefresh={handleRefresh}
-                                isRefreshing={isRefreshing}
-                              />
-                            </div>
-                          )}
+                    {(() => {
+                      const allFiles = showOnlyStaged 
+                        ? localDiffData.stagedFiles.map(f => f.file)
+                        : Array.from(new Set([...localDiffData.workingFiles.map(f => f.file), ...localDiffData.stagedFiles.map(f => f.file)]));
+                      
+                      return allFiles.map((file) => (
+                        <div
+                          key={file}
+                          ref={(el) => {
+                            fileRefs.current[file] = el;
+                          }}
+                          className={`transition-all duration-300 ${
+                            selectedFile === file
+                              ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg'
+                              : ''
+                          }`}
+                        >
+                          <div className="space-y-4">
+                            {!showOnlyStaged && localFileDiffs[file]?.working && (
+                              <div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Working Directory Changes</h3>
+                                <DiffViewer
+                                  diff={localFileDiffs[file].working}
+                                  selectedFile={file}
+                                  fromBranch="HEAD"
+                                  toBranch="Working Directory"
+                                  isSelected={selectedFile === file}
+                                  onRefresh={handleRefresh}
+                                  isRefreshing={isRefreshing}
+                                />
+                              </div>
+                            )}
+                            {localFileDiffs[file]?.staged && (
+                              <div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                  {showOnlyStaged ? 'Staged Changes' : 'Staged Changes'}
+                                </h3>
+                                <DiffViewer
+                                  diff={localFileDiffs[file].staged}
+                                  selectedFile={file}
+                                  fromBranch="HEAD"
+                                  toBranch="Staged"
+                                  isSelected={selectedFile === file}
+                                  onRefresh={handleRefresh}
+                                  isRefreshing={isRefreshing}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
               </div>
