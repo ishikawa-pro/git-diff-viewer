@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import DiffViewer from './DiffViewer';
 import FileTree from './FileTree';
 import GlobalRefreshButton from './GlobalRefreshButton';
@@ -32,6 +32,12 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   const [showOnlyStaged, setShowOnlyStaged] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  useEffect(() => {
+    if (!localDiffData && !loading) {
+      onFetchLocalDiff();
+    }
+  }, [localDiffData, loading, onFetchLocalDiff]);
+
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
     // 選択されたファイルのコンポーネントまでスクロール
@@ -52,14 +58,6 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Local Changes</h1>
           <div className="flex items-center gap-4">
-            <button
-              onClick={onFetchLocalDiff}
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? 'Loading...' : 'Show Local Changes'}
-            </button>
-            
             <button
               onClick={() => setShowOnlyStaged(!showOnlyStaged)}
               className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -164,7 +162,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No local changes loaded</h3>
-            <p className="text-gray-500">Click "Show Local Changes" to view your uncommitted changes</p>
+            <p className="text-gray-500">Your uncommitted changes will appear here</p>
           </div>
         </div>
       )}
