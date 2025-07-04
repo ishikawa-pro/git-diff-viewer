@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import DiffViewer from './DiffViewer';
+import DiffViewer, { Comment } from './DiffViewer';
 import FileTree from './FileTree';
 import GlobalRefreshButton from './GlobalRefreshButton';
+import ExportCommentsButton from './ExportCommentsButton';
 import { LocalDiffData } from '../types';
 
 interface LocalChangesViewProps {
@@ -37,6 +38,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
 }) => {
   const [showOnlyStaged, setShowOnlyStaged] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
 
   useEffect(() => {
     if (!localDiffData && !loading) {
@@ -47,6 +49,17 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
     // Note: Scrolling is now handled by the parent component when needed
+  };
+
+  const handleCommentsChange = (fileKey: string, comments: Comment[]) => {
+    setAllComments(prev => ({
+      ...prev,
+      [fileKey]: comments
+    }));
+  };
+
+  const getTotalComments = () => {
+    return Object.values(allComments).reduce((total, comments) => total + comments.length, 0);
   };
 
   return (
@@ -66,6 +79,14 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
             >
               {showOnlyStaged ? 'Staged Only' : 'All Changes'}
             </button>
+
+            <ExportCommentsButton
+              comments={Object.values(allComments).flat()}
+              diffData={localFileDiffs}
+              selectedFile={selectedFile}
+              fromBranch="HEAD"
+              toBranch="Working Directory"
+            />
 
             <GlobalRefreshButton
               onRefresh={onGlobalRefresh}
@@ -127,6 +148,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                             searchTerm={selectedFile === file ? searchTerm : ''}
                             currentSearchLineIndex={selectedFile === file ? currentSearchLineIndex : -1}
                             currentSearchGlobalIndex={selectedFile === file ? currentSearchGlobalIndex : -1}
+                            onCommentsChange={(comments) => handleCommentsChange(`${file}-working`, comments)}
                           />
                         </div>
                       )}
@@ -144,6 +166,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                             searchTerm={selectedFile === file ? searchTerm : ''}
                             currentSearchLineIndex={selectedFile === file ? currentSearchLineIndex : -1}
                             currentSearchGlobalIndex={selectedFile === file ? currentSearchGlobalIndex : -1}
+                            onCommentsChange={(comments) => handleCommentsChange(`${file}-staged`, comments)}
                           />
                         </div>
                       )}

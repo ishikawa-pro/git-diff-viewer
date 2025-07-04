@@ -14,6 +14,7 @@ interface DiffViewerProps {
   searchTerm?: string;
   currentSearchLineIndex?: number;
   currentSearchGlobalIndex?: number;
+  onCommentsChange?: (comments: Comment[]) => void;
 }
 
 interface DiffLine {
@@ -23,7 +24,7 @@ interface DiffLine {
   newLineNumber?: number;
 }
 
-interface Comment {
+export interface Comment {
   id: string;
   content: string;
   lineIndex: number;
@@ -34,7 +35,7 @@ interface Comment {
   };
 }
 
-const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1 }) => {
+const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1, onCommentsChange }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -76,10 +77,16 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       lineRange: selectedLineRange
     };
     
-    setComments([...comments, comment]);
+    const newComments = [...comments, comment];
+    setComments(newComments);
     setCommentText('');
     setShowCommentForm(false);
     setSelectedLineRange(null);
+    
+    // Notify parent component of comments change
+    if (onCommentsChange) {
+      onCommentsChange(newComments);
+    }
   };
 
   const copyCommentToClipboard = (comment: Comment) => {
@@ -102,8 +109,15 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
   };
 
   const deleteComment = (commentId: string) => {
-    setComments(comments.filter(c => c.id !== commentId));
+    const newComments = comments.filter(c => c.id !== commentId);
+    setComments(newComments);
+    
+    // Notify parent component of comments change
+    if (onCommentsChange) {
+      onCommentsChange(newComments);
+    }
   };
+
 
   const cancelComment = () => {
     setShowCommentForm(false);
