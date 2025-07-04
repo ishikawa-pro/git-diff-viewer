@@ -15,6 +15,9 @@ interface LocalChangesViewProps {
   onFileSelect: (file: string) => void;
   onRefresh: () => Promise<void>;
   onGlobalRefresh: () => Promise<void>;
+  searchTerm?: string;
+  currentSearchLineIndex?: number;
+  currentSearchGlobalIndex?: number;
 }
 
 const LocalChangesView: React.FC<LocalChangesViewProps> = ({
@@ -27,7 +30,10 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   onFetchLocalDiff,
   onFileSelect,
   onRefresh,
-  onGlobalRefresh
+  onGlobalRefresh,
+  searchTerm = '',
+  currentSearchLineIndex = -1,
+  currentSearchGlobalIndex = -1
 }) => {
   const [showOnlyStaged, setShowOnlyStaged] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -40,15 +46,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
 
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
-    // 選択されたファイルのコンポーネントまでスクロール
-    const fileRef = fileRefs.current[file];
-    if (fileRef) {
-      fileRef.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
-      });
-    }
+    // Note: Scrolling is now handled by the parent component when needed
   };
 
   return (
@@ -126,6 +124,9 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                             isSelected={selectedFile === file}
                             onRefresh={onRefresh}
                             isRefreshing={isRefreshing}
+                            searchTerm={selectedFile === file ? searchTerm : ''}
+                            currentSearchLineIndex={selectedFile === file ? currentSearchLineIndex : -1}
+                            currentSearchGlobalIndex={selectedFile === file ? currentSearchGlobalIndex : -1}
                           />
                         </div>
                       )}
@@ -140,6 +141,9 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                             isSelected={selectedFile === file}
                             onRefresh={onRefresh}
                             isRefreshing={isRefreshing}
+                            searchTerm={selectedFile === file ? searchTerm : ''}
+                            currentSearchLineIndex={selectedFile === file ? currentSearchLineIndex : -1}
+                            currentSearchGlobalIndex={selectedFile === file ? currentSearchGlobalIndex : -1}
                           />
                         </div>
                       )}

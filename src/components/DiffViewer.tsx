@@ -11,6 +11,9 @@ interface DiffViewerProps {
   isSelected?: boolean;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  searchTerm?: string;
+  currentSearchLineIndex?: number;
+  currentSearchGlobalIndex?: number;
 }
 
 interface DiffLine {
@@ -31,7 +34,7 @@ interface Comment {
   };
 }
 
-const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false }) => {
+const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1 }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -189,6 +192,15 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
   const renderDiffLine = (line: DiffLine, index: number) => {
     const isSelected = selectedLineRange && index >= selectedLineRange.start && index <= selectedLineRange.end;
     const hasComment = comments.some(c => index >= c.lineRange.start && index <= c.lineRange.end);
+    const isSearchMatch = searchTerm && line.content.toLowerCase().includes(searchTerm.toLowerCase());
+    const isCurrentSearchMatch = currentSearchLineIndex === index;
+    
+    const highlightSearchTerm = (text: string) => {
+      if (!searchTerm.trim() || !isSearchMatch) return text;
+      
+      const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, `<mark class="${isCurrentSearchMatch ? 'bg-orange-300 ring-2 ring-orange-500' : 'bg-yellow-200'} px-1 rounded">$1</mark>`);
+    };
     
     const getLineClass = (type: string) => {
       let baseClass = '';
@@ -211,6 +223,11 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       }
       if (hasComment) {
         baseClass += ' border-r-4 border-r-blue-400';
+      }
+      if (isCurrentSearchMatch) {
+        baseClass += ' ring-2 ring-orange-500 bg-orange-50';
+      } else if (isSearchMatch) {
+        baseClass += ' ring-1 ring-yellow-400 bg-yellow-50';
       }
       
       return baseClass;
@@ -240,7 +257,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
     const lineComments = comments.filter(c => index === c.lineRange.start);
     
     return (
-      <div key={index}>
+      <div key={index} data-line-index={index}>
         <div 
           className={`flex ${getLineClass(line.type)} cursor-pointer hover:bg-gray-50`}
           onClick={() => handleLineClick(index)}
@@ -260,24 +277,43 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
               <span className="flex-shrink-0 w-4 text-center font-mono text-sm">
                 {getLinePrefix(line.type)}
               </span>
-              <SyntaxHighlighter
-                language={getLanguage(selectedFile)}
-                style={oneLight}
-                customStyle={{
-                  margin: 0,
-                  padding: 0,
-                  background: 'transparent',
-                  fontSize: '13px',
-                  lineHeight: '1.5',
-                }}
-                codeTagProps={{
-                  style: {
-                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  }
-                }}
-              >
-                {line.content}
-              </SyntaxHighlighter>
+              <div className="flex-1 relative">
+                <SyntaxHighlighter
+                  language={getLanguage(selectedFile)}
+                  style={oneLight}
+                  customStyle={{
+                    margin: 0,
+                    padding: 0,
+                    background: 'transparent',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                  }}
+                  codeTagProps={{
+                    style: {
+                      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                    }
+                  }}
+                >
+                  {line.content}
+                </SyntaxHighlighter>
+                {isSearchMatch && (
+                  <div 
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      fontSize: '13px',
+                      lineHeight: '1.5',
+                      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                      color: 'transparent',
+                      whiteSpace: 'pre',
+                      overflow: 'hidden',
+                      zIndex: 1
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: highlightSearchTerm(line.content)
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -329,7 +365,14 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
   const parsedDiff = parseDiff(diff);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border">
+    <div 
+      className={`bg-white rounded-lg shadow-sm border transition-all duration-300 ${
+        (searchTerm && (currentSearchLineIndex >= 0 || currentSearchGlobalIndex >= 0)) 
+          ? 'ring-2 ring-blue-500 ring-opacity-50 shadow-lg' 
+          : ''
+      }`}
+      data-diff-viewer={selectedFile}
+    >
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center">

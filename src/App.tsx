@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import RepositorySelector from './components/RepositorySelector';
 import BranchCompareView from './components/BranchCompareView';
 import LocalChangesView from './components/LocalChangesView';
 import GlobalSidebar, { ViewMode } from './components/GlobalSidebar';
+import GlobalSearch, { GlobalSearchRef } from './components/GlobalSearch';
 import { DiffData, FileChange, RepoInfo, RepoHistoryItem, LocalDiffData } from './types';
 import { ArrowLeft } from 'lucide-react';
 
@@ -23,6 +24,11 @@ function App() {
   const [localDiffData, setLocalDiffData] = useState<LocalDiffData | null>(null);
   const [localFileDiffs, setLocalFileDiffs] = useState<Record<string, { working: string; staged: string }>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('repository-select');
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+  const [currentSearchResult, setCurrentSearchResult] = useState<{ fileIndex: number; lineIndex: number; globalIndex: number } | null>(null);
+  const [isSearchScrolling, setIsSearchScrolling] = useState(false);
+  const globalSearchRef = useRef<GlobalSearchRef>(null);
 
   const selectRepository = async (repoPath?: string) => {
     try {
@@ -142,11 +148,21 @@ function App() {
         event.preventDefault();
         handleGlobalRefresh();
       }
+      if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
+        event.preventDefault();
+        if (showGlobalSearch) {
+          // If search is already visible, focus the input using ref
+          globalSearchRef.current?.focusInput();
+        } else {
+          // If search is not visible, show it
+          setShowGlobalSearch(true);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [fromBranch, toBranch]);
+  }, [fromBranch, toBranch, showGlobalSearch]);
 
   const fetchDiff = async () => {
     if (!fromBranch || !toBranch) return;
@@ -188,14 +204,22 @@ function App() {
 
   const handleFileSelect = (file: string) => {
     setSelectedFile(file);
-    // 選択されたファイルのコンポーネントまでスクロール
-    const fileRef = fileRefs.current[file];
-    if (fileRef) {
-      fileRef.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
-      });
+  };
+  
+  const handleFileSelectWithScroll = (file: string) => {
+    setSelectedFile(file);
+    // スクロール処理（FileTreeからの選択時のみ、検索中でない場合）
+    if (!isSearchScrolling) {
+      setTimeout(() => {
+        const targetDiffViewer = document.querySelector(`[data-diff-viewer="${file}"]`);
+        if (targetDiffViewer) {
+          targetDiffViewer.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+            inline: 'nearest'
+          });
+        }
+      }, 100);
     }
   };
 
@@ -286,6 +310,140 @@ function App() {
     setCurrentView('repository-select');
   };
 
+  const getDiffDataForSearch = useCallback(() => {
+    const searchData: Array<{ fileName: string; content: string; originalFileName: string }> = [];
+    
+    if (currentView === 'branch-compare' && diffData) {
+      diffData.files.forEach(file => {
+        const diff = fileDiffs[file.file];
+        if (diff) {
+          searchData.push({
+            fileName: file.file,
+            content: diff,
+            originalFileName: file.file
+          });
+        }
+      });
+    } else if (currentView === 'local-changes' && localDiffData) {
+      const allFiles = new Set([
+        ...localDiffData.workingFiles.map(f => f.file),
+        ...localDiffData.stagedFiles.map(f => f.file)
+      ]);
+      
+      allFiles.forEach(fileName => {
+        const fileDiff = localFileDiffs[fileName];
+        if (fileDiff) {
+          // Working changes
+          if (fileDiff.working) {
+            searchData.push({
+              fileName: `${fileName} (working)`,
+              content: fileDiff.working,
+              originalFileName: fileName
+            });
+          }
+          // Staged changes
+          if (fileDiff.staged) {
+            searchData.push({
+              fileName: `${fileName} (staged)`,
+              content: fileDiff.staged,
+              originalFileName: fileName
+            });
+          }
+        }
+      });
+    }
+    
+    return searchData;
+  }, [currentView, diffData, fileDiffs, localDiffData, localFileDiffs]);
+
+  const handleSearchNavigate = useCallback((fileIndex: number, lineIndex: number, globalIndex?: number) => {
+    const searchData = getDiffDataForSearch();
+    if (fileIndex >= 0 && fileIndex < searchData.length) {
+      const targetFile = searchData[fileIndex];
+      
+      setIsSearchScrolling(true);
+      setSelectedFile(targetFile.originalFileName);
+      setCurrentSearchResult({ fileIndex, lineIndex, globalIndex: globalIndex || 0 });
+      
+      // Use a single, optimized scroll approach
+      setTimeout(() => {
+        // Find the specific line element directly
+        const lineElement = document.querySelector(`[data-diff-viewer="${targetFile.originalFileName}"] [data-line-index="${lineIndex}"]`);
+        
+        if (lineElement) {
+          console.log('Direct scroll to line:', lineIndex, 'in file:', targetFile.originalFileName);
+          // Single scroll directly to the target line
+          lineElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+          });
+          
+          // Reset scroll flag after scroll completes
+          setTimeout(() => setIsSearchScrolling(false), 1000);
+        } else {
+          // Fallback: scroll to DiffViewer component first, then to line
+          const targetDiffViewer = document.querySelector(`[data-diff-viewer="${targetFile.originalFileName}"]`);
+          if (targetDiffViewer) {
+            console.log('Fallback: scroll to DiffViewer first, then line');
+            targetDiffViewer.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+              inline: 'nearest'
+            });
+            
+            // After a longer delay, scroll to the specific line
+            setTimeout(() => {
+              const lineElement = targetDiffViewer.querySelector(`[data-line-index="${lineIndex}"]`);
+              if (lineElement) {
+                lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              // Reset scroll flag after both scrolls complete
+              setTimeout(() => setIsSearchScrolling(false), 500);
+            }, 800);
+          } else {
+            console.log('No DiffViewer found for:', targetFile.originalFileName);
+            setIsSearchScrolling(false);
+          }
+        }
+      }, 400);
+    }
+  }, [getDiffDataForSearch]);
+  
+  const handleSearchTermChange = useCallback((term: string) => {
+    setGlobalSearchTerm(term);
+    if (!term.trim()) {
+      setCurrentSearchResult(null);
+    }
+  }, []);
+  
+  const getCurrentSearchLineIndex = () => {
+    if (!currentSearchResult || !selectedFile) return -1;
+    
+    const searchData = getDiffDataForSearch();
+    const currentFileData = searchData.find(data => data.originalFileName === selectedFile);
+    
+    if (!currentFileData) return -1;
+    
+    const currentFileIndex = searchData.findIndex(data => data.originalFileName === selectedFile);
+    if (currentFileIndex === currentSearchResult.fileIndex) {
+      console.log('getCurrentSearchLineIndex:', {
+        selectedFile,
+        fileIndex: currentSearchResult.fileIndex,
+        lineIndex: currentSearchResult.lineIndex,
+        globalIndex: currentSearchResult.globalIndex
+      });
+      return currentSearchResult.lineIndex;
+    }
+    
+    return -1;
+  };
+  
+  const getCurrentSearchGlobalIndex = () => {
+    if (!currentSearchResult) return -1;
+    return currentSearchResult.globalIndex;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Global Sidebar */}
@@ -350,9 +508,12 @@ function App() {
             onFromBranchChange={setFromBranch}
             onToBranchChange={setToBranch}
             onCompare={fetchDiff}
-            onFileSelect={setSelectedFile}
+            onFileSelect={handleFileSelectWithScroll}
             onRefresh={handleRefresh}
             onGlobalRefresh={handleGlobalRefresh}
+            searchTerm={globalSearchTerm}
+            currentSearchLineIndex={getCurrentSearchLineIndex()}
+            currentSearchGlobalIndex={getCurrentSearchGlobalIndex()}
           />
         )}
 
@@ -365,9 +526,12 @@ function App() {
             isRefreshing={isRefreshing}
             isGlobalRefreshing={isGlobalRefreshing}
             onFetchLocalDiff={fetchLocalDiff}
-            onFileSelect={setSelectedFile}
+            onFileSelect={handleFileSelectWithScroll}
             onRefresh={handleRefresh}
             onGlobalRefresh={handleGlobalRefresh}
+            searchTerm={globalSearchTerm}
+            currentSearchLineIndex={getCurrentSearchLineIndex()}
+            currentSearchGlobalIndex={getCurrentSearchGlobalIndex()}
           />
         )}
 
@@ -392,6 +556,20 @@ function App() {
           </div>
         )}
       </div>
+      
+      {/* Global Search */}
+      <GlobalSearch
+        ref={globalSearchRef}
+        isVisible={showGlobalSearch}
+        onClose={() => {
+          setShowGlobalSearch(false);
+          setGlobalSearchTerm('');
+          setCurrentSearchResult(null);
+        }}
+        diffData={getDiffDataForSearch()}
+        onNavigateToResult={handleSearchNavigate}
+        onSearchTermChange={handleSearchTermChange}
+      />
     </div>
   );
 }

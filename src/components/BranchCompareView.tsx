@@ -21,6 +21,9 @@ interface BranchCompareViewProps {
   onFileSelect: (file: string) => void;
   onRefresh: () => Promise<void>;
   onGlobalRefresh: () => Promise<void>;
+  searchTerm?: string;
+  currentSearchLineIndex?: number;
+  currentSearchGlobalIndex?: number;
 }
 
 const BranchCompareView: React.FC<BranchCompareViewProps> = ({
@@ -38,21 +41,16 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
   onCompare,
   onFileSelect,
   onRefresh,
-  onGlobalRefresh
+  onGlobalRefresh,
+  searchTerm = '',
+  currentSearchLineIndex = -1,
+  currentSearchGlobalIndex = -1
 }) => {
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
-    // 選択されたファイルのコンポーネントまでスクロール
-    const fileRef = fileRefs.current[file];
-    if (fileRef) {
-      fileRef.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
-      });
-    }
+    // Note: Scrolling is now handled by the parent component when needed
   };
 
   return (
@@ -119,6 +117,9 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
                     isSelected={selectedFile === file.file}
                     onRefresh={onRefresh}
                     isRefreshing={isRefreshing}
+                    searchTerm={selectedFile === file.file ? searchTerm : ''}
+                    currentSearchLineIndex={selectedFile === file.file ? currentSearchLineIndex : -1}
+                    currentSearchGlobalIndex={selectedFile === file.file ? currentSearchGlobalIndex : -1}
                   />
                 </div>
               ))}
