@@ -4,6 +4,9 @@
   "description": "A rich Git diff viewer with syntax highlighting",
   "main": "build/electron/main.js",
   "homepage": "./",
+  "bin": {
+    "diff-viewer": "./cli.js"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
@@ -12,7 +15,8 @@
     "electron": "ELECTRON_IS_DEV=true electron electron/main.js",
     "electron-dev": "concurrently \"npm start\" \"wait-on http://localhost:3000 && NODE_ENV=development ELECTRON_IS_DEV=true electron electron/main.js\"",
     "electron-pack": "npm run build && electron-builder",
-    "dist": "npm run build && cp -r electron build/ && electron-builder --publish=never"
+    "dist": "npm run build && cp -r electron build/ && npx electron-rebuild && electron-builder --publish=never",
+    "postinstall": "npx electron-rebuild"
   },
   "keywords": [
     "git",
@@ -42,6 +46,7 @@
     "concurrently": "^8.2.2",
     "electron": "^27.1.0",
     "electron-builder": "^24.6.4",
+    "electron-rebuild": "^3.2.9",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6",
     "wait-on": "^7.2.0"

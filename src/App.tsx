@@ -36,7 +36,7 @@ function App() {
       
       if (result.success && result.path) {
         setSelectedRepo(result.path);
-        await loadBranches();
+        await loadBranchesForRepo(result.path);
         await loadRepoInfo();
         await window.electronAPI.saveRepoHistory(result.path);
         await loadRepoHistory();
@@ -49,22 +49,53 @@ function App() {
     }
   };
 
-  const loadBranches = async () => {
+  const loadBranchesForRepo = async (repoPath: string) => {
     try {
       const branchList = await window.electronAPI.getBranches();
       setBranches(branchList);
       
+      let restoredFromBranch = '';
+      let restoredToBranch = '';
+      
       try {
-        const defaultBranch = await window.electronAPI.getDefaultBranch();
-        if (defaultBranch && branchList.includes(defaultBranch)) {
-          setFromBranch(defaultBranch);
+        const branchHistory = await window.electronAPI.getBranchHistory(repoPath);
+        console.log('Branch history for repo:', repoPath, branchHistory);
+        if (branchHistory) {
+          if (branchList.includes(branchHistory.fromBranch)) {
+            restoredFromBranch = branchHistory.fromBranch;
+            setFromBranch(branchHistory.fromBranch);
+            console.log('Restored fromBranch:', branchHistory.fromBranch);
+          }
+          if (branchList.includes(branchHistory.toBranch)) {
+            restoredToBranch = branchHistory.toBranch;
+            setToBranch(branchHistory.toBranch);
+            console.log('Restored toBranch:', branchHistory.toBranch);
+          }
+        } else {
+          console.log('No branch history found for repo:', repoPath);
         }
-      } catch (defaultBranchError) {
-        console.error('Failed to get default branch:', defaultBranchError);
+      } catch (branchHistoryError) {
+        console.error('Failed to get branch history:', branchHistoryError);
+      }
+      
+      if (!restoredFromBranch) {
+        try {
+          const defaultBranch = await window.electronAPI.getDefaultBranch();
+          if (defaultBranch && branchList.includes(defaultBranch)) {
+            setFromBranch(defaultBranch);
+          }
+        } catch (defaultBranchError) {
+          console.error('Failed to get default branch:', defaultBranchError);
+        }
       }
     } catch (error) {
       console.error('Failed to load branches:', error);
     }
+  };
+
+  const loadBranches = async () => {
+    if (!selectedRepo) return;
+    await loadBranchesForRepo(selectedRepo);
   };
 
   const loadRepoInfo = async () => {
@@ -87,6 +118,18 @@ function App() {
 
   useEffect(() => {
     loadRepoHistory();
+    
+    // Listen for CLI initialization
+    const handleInitializeWithRepo = (_event: any, repoPath: string) => {
+      console.log('Received initialize-with-repo event with path:', repoPath);
+      selectRepository(repoPath);
+    };
+    
+    window.electronAPI.onInitializeWithRepo(handleInitializeWithRepo);
+    
+    return () => {
+      window.electronAPI.removeInitializeWithRepoListener(handleInitializeWithRepo);
+    };
   }, []);
 
   useEffect(() => {
@@ -109,6 +152,15 @@ function App() {
       const data = await window.electronAPI.getDiff(fromBranch, toBranch);
       setDiffData(data);
       setSelectedFile(null);
+      
+      if (selectedRepo) {
+        try {
+          await window.electronAPI.saveBranchHistory(selectedRepo, fromBranch, toBranch);
+          console.log('Saved branch history:', selectedRepo, fromBranch, toBranch);
+        } catch (error) {
+          console.error('Failed to save branch history:', error);
+        }
+      }
       
       // 各ファイルの個別diffを取得
       const diffs: Record<string, string> = {};
@@ -159,7 +211,6 @@ function App() {
     
     setIsGlobalRefreshing(true);
     try {
-      await loadBranches();
       await loadRepoInfo();
       await fetchDiff();
     } finally {

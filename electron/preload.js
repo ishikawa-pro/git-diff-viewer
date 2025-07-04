@@ -9,5 +9,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFileDiff: (fromBranch, toBranch, filePath) => ipcRenderer.invoke('get-file-diff', fromBranch, toBranch, filePath),
   getRepoInfo: () => ipcRenderer.invoke('get-repo-info'),
   getRepoHistory: () => ipcRenderer.invoke('get-repo-history'),
-  saveRepoHistory: (repoPath) => ipcRenderer.invoke('save-repo-history', repoPath)
+  saveRepoHistory: (repoPath) => ipcRenderer.invoke('save-repo-history', repoPath),
+  saveBranchHistory: (repoPath, fromBranch, toBranch) => ipcRenderer.invoke('save-branch-history', repoPath, fromBranch, toBranch),
+  getBranchHistory: (repoPath) => ipcRenderer.invoke('get-branch-history', repoPath),
+  
+  // Event listener for CLI initialization
+  onInitializeWithRepo: (callback) => ipcRenderer.on('initialize-with-repo', callback),
+  removeInitializeWithRepoListener: (callback) => ipcRenderer.removeListener('initialize-with-repo', callback)
 }); 

@@ -11,6 +11,7 @@ A rich desktop application for viewing Git diffs between branches with syntax hi
 - 📊 **Change Statistics**: View insertions, deletions, and file counts
 - 🎯 **Modern UI**: Clean and responsive design with Tailwind CSS
 - 🔒 **Local Access**: Direct access to local Git repositories
+- 🖥️ **Command Line Interface**: Launch from terminal like VSCode's `code` command
 
 ## Installation
 
@@ -40,10 +41,68 @@ This will create distributable packages for your platform.
 
 ## Usage
 
+### GUI Mode
 1. Launch the application
 2. Click "Open Repository" to select a local Git repository
 3. Select the branches you want to compare
 4. Click "Compare" to view the diff
+
+### Command Line Interface (CLI)
+
+The application also provides a command-line interface similar to VSCode's `code` command:
+
+#### Development Environment
+```bash
+# Install CLI globally for development
+npm link
+
+# Open repository selector
+diff-viewer
+
+# Open specific Git repository
+diff-viewer /path/to/your/git/repository
+diff-viewer .  # Open current directory if it's a Git repo
+```
+
+#### Production Environment (After Building)
+
+1. Build the application:
+   ```bash
+   npm run dist
+   ```
+
+2. Install the application on your system
+
+3. Create a symbolic link to use the CLI globally:
+
+   **macOS:**
+   ```bash
+   sudo ln -s "/Applications/Git Diff Viewer.app/Contents/Resources/cli.js" /usr/local/bin/diff-viewer
+   ```
+
+   **Windows:**
+   ```batch
+   # Create a batch file in a directory that's in your PATH
+   # Contents of diff-viewer.bat:
+   @echo off
+   node "C:\Program Files\Git Diff Viewer\resources\cli.js" %*
+   ```
+
+   **Linux:**
+   ```bash
+   # After extracting the AppImage
+   sudo ln -s "/path/to/extracted/git-diff-viewer/resources/cli.js" /usr/local/bin/diff-viewer
+   ```
+
+4. Use the CLI from anywhere:
+   ```bash
+   # Open repository selector
+   diff-viewer
+
+   # Open specific Git repository
+   diff-viewer /path/to/your/git/repository
+   diff-viewer .  # Open current directory
+   ```
 
 ## Project Structure
 

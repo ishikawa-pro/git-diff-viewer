@@ -24,7 +24,7 @@ function initDatabase() {
 }
 
 function createTables() {
-  const createTableQuery = `
+  const createRepoHistoryQuery = `
     CREATE TABLE IF NOT EXISTS repo_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       path TEXT UNIQUE NOT NULL,
@@ -33,11 +33,30 @@ function createTables() {
     )
   `;
   
-  db.run(createTableQuery, (err) => {
+  const createBranchHistoryQuery = `
+    CREATE TABLE IF NOT EXISTS branch_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      repo_path TEXT NOT NULL,
+      from_branch TEXT NOT NULL,
+      to_branch TEXT NOT NULL,
+      last_used DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(repo_path)
+    )
+  `;
+  
+  db.run(createRepoHistoryQuery, (err) => {
     if (err) {
-      console.error('Error creating table:', err);
+      console.error('Error creating repo_history table:', err);
     } else {
       console.log('Repo history table ready');
+    }
+  });
+  
+  db.run(createBranchHistoryQuery, (err) => {
+    if (err) {
+      console.error('Error creating branch_history table:', err);
+    } else {
+      console.log('Branch history table ready');
     }
   });
 }
@@ -87,6 +106,54 @@ function getRepoHistory() {
   });
 }
 
+function saveBranchHistory(repoPath, fromBranch, toBranch) {
+  return new Promise((resolve, reject) => {
+    const query = `
+      INSERT OR REPLACE INTO branch_history (repo_path, from_branch, to_branch, last_used)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `;
+    
+    db.run(query, [repoPath, fromBranch, toBranch], function(err) {
+      if (err) {
+        console.error('Error saving branch history:', err);
+        reject(err);
+      } else {
+        console.log('Branch history saved for:', repoPath);
+        resolve();
+      }
+    });
+  });
+}
+
+function getBranchHistory(repoPath) {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT from_branch, to_branch, last_used
+      FROM branch_history
+      WHERE repo_path = ?
+      ORDER BY last_used DESC
+      LIMIT 1
+    `;
+    
+    db.get(query, [repoPath], (err, row) => {
+      if (err) {
+        console.error('Error getting branch history:', err);
+        reject(err);
+      } else {
+        if (row) {
+          resolve({
+            fromBranch: row.from_branch,
+            toBranch: row.to_branch,
+            lastUsed: new Date(row.last_used)
+          });
+        } else {
+          resolve(null);
+        }
+      }
+    });
+  });
+}
+
 function createWindow(repoPath = null) {
   // Calculate position offset for new windows
   const windowCount = windows.size;
@@ -102,7 +169,7 @@ function createWindow(repoPath = null) {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, 'assets/icon.png'),
+    icon: path.join(__dirname, '../logo.png'),
     titleBarStyle: 'default',
     show: false
   });
@@ -137,6 +204,16 @@ function createWindow(repoPath = null) {
     
     // If repoPath is provided, initialize the repository for this window
     if (repoPath) {
+      // Initialize the git instance for this window
+      const windowId = window.id;
+      const windowData = windows.get(windowId);
+      if (windowData) {
+        windowData.git = simpleGit(repoPath);
+        windowData.repoPath = repoPath;
+        git = windowData.git; // Set global git for compatibility
+      }
+      
+      // Send initialization message to frontend
       window.webContents.send('initialize-with-repo', repoPath);
     }
   });
@@ -225,7 +302,28 @@ function createMenu() {
 app.whenReady().then(() => {
   initDatabase();
   createMenu();
-  createWindow();
+  
+  // Check if path was provided via CLI
+  const cliPath = process.env.CLI_OPEN_PATH || process.argv[2];
+  
+  // If CLI path is provided, validate it
+  if (cliPath) {
+    if (fs.existsSync(cliPath) && fs.statSync(cliPath).isDirectory()) {
+      // Check if it's a git repository
+      if (fs.existsSync(path.join(cliPath, '.git'))) {
+        createWindow(cliPath);
+      } else {
+        console.error('Error: Directory is not a Git repository');
+        createWindow();
+      }
+    } else {
+      console.error('Error: Invalid directory path');
+      createWindow();
+    }
+  } else {
+    // No CLI path provided, start normally with repository selector
+    createWindow();
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -447,5 +545,23 @@ ipcMain.handle('save-repo-history', async (event, repoPath) => {
   } catch (error) {
     console.error('Failed to save repo history:', error);
     throw error;
+  }
+});
+
+ipcMain.handle('save-branch-history', async (event, repoPath, fromBranch, toBranch) => {
+  try {
+    await saveBranchHistory(repoPath, fromBranch, toBranch);
+  } catch (error) {
+    console.error('Failed to save branch history:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('get-branch-history', async (event, repoPath) => {
+  try {
+    return await getBranchHistory(repoPath);
+  } catch (error) {
+    console.error('Failed to get branch history:', error);
+    return null;
   }
 }); 

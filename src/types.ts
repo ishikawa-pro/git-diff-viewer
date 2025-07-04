@@ -27,6 +27,12 @@ export interface RepoHistoryItem {
   lastOpened: Date;
 }
 
+export interface BranchHistory {
+  fromBranch: string;
+  toBranch: string;
+  lastUsed: Date;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -39,6 +45,10 @@ declare global {
       getRepoInfo: () => Promise<RepoInfo | null>;
       getRepoHistory: () => Promise<RepoHistoryItem[]>;
       saveRepoHistory: (repoPath: string) => Promise<void>;
+      saveBranchHistory: (repoPath: string, fromBranch: string, toBranch: string) => Promise<void>;
+      getBranchHistory: (repoPath: string) => Promise<BranchHistory | null>;
+      onInitializeWithRepo: (callback: (event: any, repoPath: string) => void) => void;
+      removeInitializeWithRepoListener: (callback: (event: any, repoPath: string) => void) => void;
     };
   }
 } 
