@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { FileText, GitCompare, RefreshCw, Copy, Check } from 'lucide-react';
+import { FileText, GitCompare, RefreshCw, Copy, Check, MessageCircle, X } from 'lucide-react';
 
 interface DiffViewerProps {
   diff: string;
@@ -20,9 +20,25 @@ interface DiffLine {
   newLineNumber?: number;
 }
 
+interface Comment {
+  id: string;
+  content: string;
+  lineIndex: number;
+  timestamp: number;
+  lineRange: {
+    start: number;
+    end: number;
+  };
+}
+
 const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [selectedLineRange, setSelectedLineRange] = useState<{ start: number; end: number } | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [showCommentForm, setShowCommentForm] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<number | null>(null);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -32,6 +48,65 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
     }
+  };
+
+  const handleLineClick = (lineIndex: number) => {
+    if (selectionStart === null) {
+      setSelectionStart(lineIndex);
+    } else {
+      const start = Math.min(selectionStart, lineIndex);
+      const end = Math.max(selectionStart, lineIndex);
+      setSelectedLineRange({ start, end });
+      setShowCommentForm(true);
+      setSelectionStart(null);
+    }
+  };
+
+  const addComment = () => {
+    if (!commentText.trim() || !selectedLineRange) return;
+    
+    const comment: Comment = {
+      id: Date.now().toString(),
+      content: commentText,
+      lineIndex: selectedLineRange.start,
+      timestamp: Date.now(),
+      lineRange: selectedLineRange
+    };
+    
+    setComments([...comments, comment]);
+    setCommentText('');
+    setShowCommentForm(false);
+    setSelectedLineRange(null);
+  };
+
+  const copyCommentToClipboard = (comment: Comment) => {
+    const parsedDiff = parseDiff(diff);
+    const startLine = parsedDiff[comment.lineRange.start];
+    const endLine = parsedDiff[comment.lineRange.end];
+    
+    const commentData = {
+      comment: comment.content,
+      filePath: selectedFile || 'Unknown file',
+      lineRange: `${startLine.oldLineNumber || startLine.newLineNumber || 'N/A'}-${endLine.oldLineNumber || endLine.newLineNumber || 'N/A'}`,
+      content: parsedDiff.slice(comment.lineRange.start, comment.lineRange.end + 1)
+        .map(line => line.content)
+        .join('\n')
+    };
+    
+    const clipboardContent = `Comment: ${commentData.comment}\nFile: ${commentData.filePath}\nLine Range: ${commentData.lineRange}\n\nCode:\n${commentData.content}`;
+    
+    copyToClipboard(clipboardContent);
+  };
+
+  const deleteComment = (commentId: string) => {
+    setComments(comments.filter(c => c.id !== commentId));
+  };
+
+  const cancelComment = () => {
+    setShowCommentForm(false);
+    setSelectedLineRange(null);
+    setCommentText('');
+    setSelectionStart(null);
   };
   
   const getLanguage = (filename: string | null) => {
@@ -112,17 +187,33 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
   };
 
   const renderDiffLine = (line: DiffLine, index: number) => {
+    const isSelected = selectedLineRange && index >= selectedLineRange.start && index <= selectedLineRange.end;
+    const hasComment = comments.some(c => index >= c.lineRange.start && index <= c.lineRange.end);
+    
     const getLineClass = (type: string) => {
+      let baseClass = '';
       switch (type) {
         case 'added':
-          return 'bg-green-50 border-l-4 border-green-400';
+          baseClass = 'bg-green-50 border-l-4 border-green-400';
+          break;
         case 'removed':
-          return 'bg-red-50 border-l-4 border-red-400';
+          baseClass = 'bg-red-50 border-l-4 border-red-400';
+          break;
         case 'hunk':
-          return 'bg-blue-50 border-l-4 border-blue-400 font-semibold text-blue-800';
+          baseClass = 'bg-blue-50 border-l-4 border-blue-400 font-semibold text-blue-800';
+          break;
         default:
-          return 'bg-white';
+          baseClass = 'bg-white';
       }
+      
+      if (isSelected) {
+        baseClass += ' bg-yellow-100 border-yellow-500';
+      }
+      if (hasComment) {
+        baseClass += ' border-r-4 border-r-blue-400';
+      }
+      
+      return baseClass;
     };
 
     const getLinePrefix = (type: string) => {
@@ -146,43 +237,91 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       );
     }
 
+    const lineComments = comments.filter(c => index === c.lineRange.start);
+    
     return (
-      <div key={index} className={`flex ${getLineClass(line.type)}`}>
-        <div className="flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r bg-gray-50 font-mono">
-          <span className="block">
-            {line.type === 'removed' || line.type === 'context' ? line.oldLineNumber : ''}
-          </span>
-        </div>
-        <div className="flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r bg-gray-50 font-mono">
-          <span className="block">
-            {line.type === 'added' || line.type === 'context' ? line.newLineNumber : ''}
-          </span>
-        </div>
-        <div className="flex-1 px-2 py-1">
-          <div className="flex">
-            <span className="flex-shrink-0 w-4 text-center font-mono text-sm">
-              {getLinePrefix(line.type)}
+      <div key={index}>
+        <div 
+          className={`flex ${getLineClass(line.type)} cursor-pointer hover:bg-gray-50`}
+          onClick={() => handleLineClick(index)}
+        >
+          <div className="flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r bg-gray-50 font-mono">
+            <span className="block">
+              {line.type === 'removed' || line.type === 'context' ? line.oldLineNumber : ''}
             </span>
-            <SyntaxHighlighter
-              language={getLanguage(selectedFile)}
-              style={oneLight}
-              customStyle={{
-                margin: 0,
-                padding: 0,
-                background: 'transparent',
-                fontSize: '13px',
-                lineHeight: '1.5',
-              }}
-              codeTagProps={{
-                style: {
-                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                }
-              }}
-            >
-              {line.content}
-            </SyntaxHighlighter>
+          </div>
+          <div className="flex-shrink-0 w-20 px-2 py-1 text-xs text-gray-500 border-r bg-gray-50 font-mono">
+            <span className="block">
+              {line.type === 'added' || line.type === 'context' ? line.newLineNumber : ''}
+            </span>
+          </div>
+          <div className="flex-1 px-2 py-1">
+            <div className="flex">
+              <span className="flex-shrink-0 w-4 text-center font-mono text-sm">
+                {getLinePrefix(line.type)}
+              </span>
+              <SyntaxHighlighter
+                language={getLanguage(selectedFile)}
+                style={oneLight}
+                customStyle={{
+                  margin: 0,
+                  padding: 0,
+                  background: 'transparent',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                }}
+                codeTagProps={{
+                  style: {
+                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                  }
+                }}
+              >
+                {line.content}
+              </SyntaxHighlighter>
+            </div>
           </div>
         </div>
+        {lineComments.length > 0 && (
+          <div className="ml-20 bg-blue-50 border-l-4 border-blue-400 p-3">
+            {lineComments.map((comment) => (
+              <div key={comment.id} className="mb-2 last:mb-0">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-700">{comment.content}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Line {comment.lineRange.start === comment.lineRange.end ? 
+                        comment.lineRange.start + 1 : 
+                        `${comment.lineRange.start + 1}-${comment.lineRange.end + 1}`
+                      } • {new Date(comment.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyCommentToClipboard(comment);
+                      }}
+                      className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
+                      title="Copy comment to clipboard"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteComment(comment.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                      title="Delete comment"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -243,6 +382,55 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
           )}
         </div>
       </div>
+      
+      {showCommentForm && selectedLineRange && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Add Comment</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Line {selectedLineRange.start === selectedLineRange.end ? 
+                  selectedLineRange.start + 1 : 
+                  `${selectedLineRange.start + 1}-${selectedLineRange.end + 1}`
+                } in {selectedFile}
+              </p>
+            </div>
+            <div className="p-4">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Enter your comment..."
+                className="w-full p-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={4}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={cancelComment}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addComment}
+                disabled={!commentText.trim()}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Add Comment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {selectionStart !== null && (
+        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+          <p className="text-sm">
+            Click another line to select range (starting from line {selectionStart + 1})
+          </p>
+        </div>
+      )}
     </div>
   );
 };
