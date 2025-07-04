@@ -1,7 +1,7 @@
 import React from 'react';
 import { GitBranch, FileText, Folder } from 'lucide-react';
 
-export type ViewMode = 'repository-select' | 'branch-compare' | 'local-changes';
+export type ViewMode = 'repository-select' | 'local-changes' | 'branch-compare';
 
 interface GlobalSidebarProps {
   currentView: ViewMode;
@@ -25,17 +25,17 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({
       enabled: true
     },
     {
-      id: 'branch-compare' as ViewMode,
-      label: 'Branch Compare',
-      icon: GitBranch,
-      description: 'Compare branches',
-      enabled: isRepoSelected
-    },
-    {
       id: 'local-changes' as ViewMode,
       label: 'Local Changes',
       icon: FileText,
       description: 'View uncommitted changes',
+      enabled: isRepoSelected
+    },
+    {
+      id: 'branch-compare' as ViewMode,
+      label: 'Branch Compare',
+      icon: GitBranch,
+      description: 'Compare branches',
       enabled: isRepoSelected
     }
   ];

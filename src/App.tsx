@@ -42,8 +42,8 @@ function App() {
         await loadRepoInfo();
         await window.electronAPI.saveRepoHistory(result.path);
         await loadRepoHistory();
-        // リポジトリ選択後、ブランチ比較ビューに切り替え
-        setCurrentView('branch-compare');
+        // リポジトリ選択後、ローカル変更ビューに切り替え
+        setCurrentView('local-changes');
       } else if (result.error) {
         alert(`Repository error: ${result.error}`);
       }
