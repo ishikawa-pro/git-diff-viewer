@@ -10,6 +10,7 @@ interface Comment {
     start: number;
     end: number;
   };
+  fileName?: string;
 }
 
 interface DiffLine {
@@ -99,11 +100,68 @@ const ExportCommentsButton: React.FC<ExportCommentsButtonProps> = ({
     }
 
     const exportData = comments.map((comment, index) => {
-      return `=== Comment ${index + 1} ===\nComment: ${comment.content}\nTimestamp: ${new Date(comment.timestamp).toLocaleString()}`;
+      const diffContent = getDiffContentForComment(comment);
+      
+      return `Comment: ${comment.content}
+File: ${comment.fileName || selectedFile || 'Unknown file'}
+Line Range: ${comment.lineRange.start + 1}${comment.lineRange.start !== comment.lineRange.end ? `-${comment.lineRange.end + 1}` : ''}
+Code:
+${diffContent}`;
     });
 
     const finalContent = exportData.join('\n\n');
     copyToClipboard(finalContent);
+  };
+
+  const getDiffContentForComment = (comment: Comment): string => {
+    const fileKey = comment.fileName || selectedFile;
+    if (!fileKey) return 'No file information available';
+    
+    const diffText = typeof diffData[fileKey] === 'string' 
+      ? diffData[fileKey] as string
+      : (diffData[fileKey] as { working: string; staged: string })?.working || 
+        (diffData[fileKey] as { working: string; staged: string })?.staged || '';
+    
+    if (!diffText) {
+      // Try to find the file in all available diff data
+      const allKeys = Object.keys(diffData);
+      for (const key of allKeys) {
+        if (key.includes(fileKey) || fileKey.includes(key)) {
+          const keyDiffText = typeof diffData[key] === 'string' 
+            ? diffData[key] as string
+            : (diffData[key] as { working: string; staged: string })?.working || 
+              (diffData[key] as { working: string; staged: string })?.staged || '';
+          if (keyDiffText) {
+            const parsedDiff = parseDiff(keyDiffText);
+            const startLine = Math.max(0, comment.lineRange.start);
+            const endLine = Math.min(parsedDiff.length - 1, comment.lineRange.end);
+            
+            const contextLines = parsedDiff.slice(startLine, endLine + 1);
+            
+            return contextLines.map(line => {
+              const prefix = line.type === 'added' ? '+' : 
+                            line.type === 'removed' ? '-' : 
+                            line.type === 'hunk' ? '' : ' ';
+              return `${prefix}${line.content}`;
+            }).join('\n');
+          }
+        }
+      }
+      return 'No diff content available';
+    }
+    
+    const parsedDiff = parseDiff(diffText);
+    const startLine = Math.max(0, comment.lineRange.start);
+    const endLine = Math.min(parsedDiff.length - 1, comment.lineRange.end);
+    
+    const contextLines = parsedDiff.slice(startLine, endLine + 1);
+    
+    return contextLines.map(line => {
+      const prefix = line.type === 'added' ? '+' : 
+                    line.type === 'removed' ? '-' : 
+                    line.type === 'hunk' ? '' : ' ';
+      return `${prefix}${line.content}`;
+    }).join('\n');
   };
 
   // Get total comments count across all files

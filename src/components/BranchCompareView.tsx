@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import BranchSelector from './BranchSelector';
-import DiffViewer from './DiffViewer';
+import DiffViewer, { Comment } from './DiffViewer';
 import FileTree from './FileTree';
 import GlobalRefreshButton from './GlobalRefreshButton';
+import ExportCommentsButton from './ExportCommentsButton';
 import { DiffData } from '../types';
 
 interface BranchCompareViewProps {
@@ -51,10 +52,18 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
   onToggleSidebar
 }) => {
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
 
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
     // Note: Scrolling is now handled by the parent component when needed
+  };
+
+  const handleCommentsChange = (fileKey: string, comments: Comment[]) => {
+    setAllComments(prev => ({
+      ...prev,
+      [fileKey]: comments
+    }));
   };
 
   return (
@@ -74,11 +83,20 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
             </button>
             <h1 className="text-2xl font-bold text-gray-900">Branch Compare</h1>
           </div>
-          <GlobalRefreshButton
-            onRefresh={onGlobalRefresh}
-            isRefreshing={isGlobalRefreshing}
-            disabled={!fromBranch || !toBranch}
-          />
+          <div className="flex items-center gap-4">
+            <ExportCommentsButton
+              comments={Object.values(allComments).flat()}
+              diffData={fileDiffs}
+              selectedFile={selectedFile}
+              fromBranch={fromBranch}
+              toBranch={toBranch}
+            />
+            <GlobalRefreshButton
+              onRefresh={onGlobalRefresh}
+              isRefreshing={isGlobalRefreshing}
+              disabled={!fromBranch || !toBranch}
+            />
+          </div>
         </div>
         
         <div className="mt-4">
@@ -135,6 +153,7 @@ const BranchCompareView: React.FC<BranchCompareViewProps> = ({
                     searchTerm={selectedFile === file.file ? searchTerm : ''}
                     currentSearchLineIndex={selectedFile === file.file ? currentSearchLineIndex : -1}
                     currentSearchGlobalIndex={selectedFile === file.file ? currentSearchGlobalIndex : -1}
+                    onCommentsChange={(comments) => handleCommentsChange(file.file, comments)}
                   />
                 </div>
               ))}

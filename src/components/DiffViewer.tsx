@@ -33,6 +33,7 @@ export interface Comment {
     start: number;
     end: number;
   };
+  fileName?: string;
 }
 
 const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1, onCommentsChange }) => {
@@ -74,7 +75,8 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       content: commentText,
       lineIndex: selectedLineRange.start,
       timestamp: Date.now(),
-      lineRange: selectedLineRange
+      lineRange: selectedLineRange,
+      fileName: selectedFile || undefined
     };
     
     const newComments = [...comments, comment];
