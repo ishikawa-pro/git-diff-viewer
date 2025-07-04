@@ -19,6 +19,8 @@ interface LocalChangesViewProps {
   searchTerm?: string;
   currentSearchLineIndex?: number;
   currentSearchGlobalIndex?: number;
+  sidebarVisible: boolean;
+  onToggleSidebar: () => void;
 }
 
 const LocalChangesView: React.FC<LocalChangesViewProps> = ({
@@ -34,7 +36,9 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   onGlobalRefresh,
   searchTerm = '',
   currentSearchLineIndex = -1,
-  currentSearchGlobalIndex = -1
+  currentSearchGlobalIndex = -1,
+  sidebarVisible,
+  onToggleSidebar
 }) => {
   const [showOnlyStaged, setShowOnlyStaged] = useState(false);
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -67,7 +71,18 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
       {/* Header Controls */}
       <div className="bg-white shadow-sm border-b px-6 py-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Local Changes</h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onToggleSidebar}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+              title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900">Local Changes</h1>
+          </div>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowOnlyStaged(!showOnlyStaged)}
