@@ -6,6 +6,7 @@ import GlobalSidebar, { ViewMode } from './components/GlobalSidebar';
 import GlobalSearch, { GlobalSearchRef } from './components/GlobalSearch';
 import { DiffData, FileChange, RepoInfo, RepoHistoryItem, LocalDiffData } from './types';
 import { ArrowLeft } from 'lucide-react';
+import { useVimKeyBindings } from './hooks/useVimKeyBindings';
 
 function App() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -29,6 +30,25 @@ function App() {
   const [currentSearchResult, setCurrentSearchResult] = useState<{ fileIndex: number; lineIndex: number; globalIndex: number } | null>(null);
   const [isSearchScrolling, setIsSearchScrolling] = useState(false);
   const globalSearchRef = useRef<GlobalSearchRef>(null);
+
+  // vim風キーバインドを有効にする
+  useVimKeyBindings({
+    enabled: true,
+    onScrollUp: (amount = 50) => {
+      window.scrollBy({ top: -amount, behavior: 'smooth' });
+    },
+    onScrollDown: (amount = 50) => {
+      window.scrollBy({ top: amount, behavior: 'smooth' });
+    },
+    onPageUp: () => {
+      const pageHeight = window.innerHeight * 0.5;
+      window.scrollBy({ top: -pageHeight, behavior: 'smooth' });
+    },
+    onPageDown: () => {
+      const pageHeight = window.innerHeight * 0.5;
+      window.scrollBy({ top: pageHeight, behavior: 'smooth' });
+    }
+  });
 
   const selectRepository = async (repoPath?: string) => {
     try {
