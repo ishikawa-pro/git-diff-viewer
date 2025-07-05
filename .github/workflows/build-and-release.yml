@@ -38,7 +38,7 @@ jobs:
         run: npx electron-rebuild
         
       - name: Build application
-        run: npm run dist
+        run: npm run dist -- --mac.identity=null
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -46,44 +46,63 @@ jobs:
       - name: Ad-hoc sign macOS app
         if: matrix.os == 'macos-latest'
         run: |
-          # Find all .app bundles
-          find dist -name "*.app" -type d | while read -r APP_PATH; do
-            echo "Ad-hoc signing: $APP_PATH"
-            
-            # Remove extended attributes
-            xattr -cr "$APP_PATH"
-            
-            # Remove existing signatures
-            find "$APP_PATH" -type f -perm +111 -exec codesign --remove-signature {} \; 2>/dev/null || true
-            find "$APP_PATH" -name "*.dylib" -exec codesign --remove-signature {} \; 2>/dev/null || true
-            find "$APP_PATH" -name "*.framework" -exec codesign --remove-signature {} \; 2>/dev/null || true
-            find "$APP_PATH" -name "*.app" -exec codesign --remove-signature {} \; 2>/dev/null || true
-            
-            # Sign frameworks
-            find "$APP_PATH/Contents/Frameworks" -name "*.framework" -type d | while read -r framework; do
-              codesign --force --deep --sign - "$framework"
-            done
-            
-            # Sign helper apps
-            find "$APP_PATH/Contents" -name "*.app" -type d -not -path "$APP_PATH" | while read -r helper; do
-              codesign --force --deep --sign - "$helper"
-            done
-            
-            # Sign libraries
-            find "$APP_PATH" -name "*.dylib" -o -name "*.so" | while read -r lib; do
-              codesign --force --sign - "$lib"
-            done
-            
-            # Sign executables
-            find "$APP_PATH" -type f -perm +111 | while read -r exe; do
-              codesign --force --sign - "$exe" 2>/dev/null || true
-            done
-            
-            # Sign main app
-            codesign --force --deep --sign - "$APP_PATH"
-            
-            # Verify
-            codesign --verify --deep --verbose "$APP_PATH" || echo "Verification warning (expected for ad-hoc signing)"
+          # Process each architecture separately
+          for ARCH_DIR in dist/mac dist/mac-arm64; do
+            if [ -d "$ARCH_DIR" ]; then
+              APP_PATH="$ARCH_DIR/Git Diff Viewer.app"
+              if [ -d "$APP_PATH" ]; then
+                echo "Processing app at: $APP_PATH"
+                
+                # Remove extended attributes
+                xattr -cr "$APP_PATH"
+                
+                # Remove all existing signatures
+                find "$APP_PATH" -type f -perm +111 -exec codesign --remove-signature {} \; 2>/dev/null || true
+                find "$APP_PATH" -name "*.dylib" -exec codesign --remove-signature {} \; 2>/dev/null || true
+                find "$APP_PATH" -name "*.framework" -exec codesign --remove-signature {} \; 2>/dev/null || true
+                find "$APP_PATH" -name "*.app" -exec codesign --remove-signature {} \; 2>/dev/null || true
+                
+                # Sign in correct order: frameworks first
+                if [ -d "$APP_PATH/Contents/Frameworks" ]; then
+                  find "$APP_PATH/Contents/Frameworks" -name "*.framework" -type d | while read -r framework; do
+                    echo "Signing framework: $framework"
+                    codesign --force --deep --sign - "$framework"
+                  done
+                fi
+                
+                # Sign helper apps (they are inside Frameworks directory)
+                if [ -d "$APP_PATH/Contents/Frameworks" ]; then
+                  find "$APP_PATH/Contents/Frameworks" -name "*.app" -type d | while read -r helper; do
+                    echo "Signing helper app: $helper"
+                    codesign --force --deep --sign - "$helper"
+                  done
+                fi
+                
+                # Sign all libraries
+                find "$APP_PATH" -name "*.dylib" -o -name "*.so" | while read -r lib; do
+                  echo "Signing library: $lib"
+                  codesign --force --sign - "$lib"
+                done
+                
+                # Sign main executable
+                MAIN_EXEC="$APP_PATH/Contents/MacOS/Git Diff Viewer"
+                if [ -f "$MAIN_EXEC" ]; then
+                  echo "Signing main executable: $MAIN_EXEC"
+                  codesign --force --sign - "$MAIN_EXEC"
+                fi
+                
+                # Finally sign the main app bundle
+                echo "Signing main app bundle: $APP_PATH"
+                codesign --force --deep --sign - "$APP_PATH"
+                
+                # Verify
+                echo "Verifying signature..."
+                codesign --verify --deep --verbose "$APP_PATH"
+                
+                # Additional verification
+                spctl -a -t open --context context:primary-signature -v "$APP_PATH" 2>&1 || echo "Gatekeeper check failed (expected for ad-hoc signing)"
+              fi
+            fi
           done
           
       - name: Upload artifacts (macOS)
