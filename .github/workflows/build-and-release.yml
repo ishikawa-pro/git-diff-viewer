@@ -18,7 +18,6 @@ jobs:
         
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      CSC_FOR_PULL_REQUEST: "true"
         
     steps:
       - name: Checkout code
@@ -43,25 +42,56 @@ jobs:
         run: npx electron-rebuild
         
       - name: Build application
-        run: npm run dist
+        run: npx electron-builder --mac --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Fix code signing (macOS)
+      - name: Unify code signing (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          # Re-sign all apps with consistent ad-hoc signature
-          for APP in dist/mac*/Git\ Diff\ Viewer.app; do
-            if [ -d "$APP" ]; then
-              echo "Re-signing $APP with ad-hoc signature..."
-              # Remove all existing signatures
-              find "$APP" -type f -perm +111 -exec codesign --remove-signature {} \; 2>/dev/null || true
-              # Sign with ad-hoc
-              codesign --force --deep --sign - "$APP"
-              # Verify
-              codesign --verify --deep --verbose "$APP"
-            fi
-          done
+          APP="dist/mac/Git Diff Viewer.app"
+          if [ -d "$APP" ]; then
+            echo "======================================"
+            echo "Unifying code signatures for: $APP"
+            echo "======================================"
+            
+            # Remove all existing signatures
+            find "$APP" -type d -name '*.app' -exec codesign --remove-signature {} \; 2>/dev/null || true
+            find "$APP" -type f \( -perm /111 -o -name '*.dylib' -o -name '*.so' -o -name '*.node' \) \
+                 -exec codesign --remove-signature {} \; 2>/dev/null || true
+            
+            # Sign frameworks and libraries first
+            echo "Signing frameworks and libraries..."
+            find "$APP/Contents/Frameworks" -type f \( -perm /111 -o -name '*.dylib' -o -name '*.so' -o -name '*.node' \) \
+                 -exec codesign --force --sign - {} \; 2>/dev/null || true
+            
+            # Sign nested helper apps
+            echo "Signing helper apps..."
+            find "$APP/Contents/Frameworks" -type d -name '*.app' | while read -r helper; do
+              codesign --force --deep --sign - "$helper"
+            done
+            
+            # Sign main app with hardened runtime
+            echo "Signing main app with hardened runtime..."
+            codesign --force --deep --options runtime --timestamp=none --sign - "$APP"
+            
+            # Remove quarantine attributes
+            xattr -cr "$APP"
+            
+            # Verify signature
+            echo "======================================"
+            echo "Verifying signature..."
+            echo "======================================"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+          fi
+          
+      - name: Create ZIP with ditto (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          APP="dist/mac/Git Diff Viewer.app"
+          if [ -d "$APP" ]; then
+            ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/Git-Diff-Viewer-${GITHUB_REF##*/}-mac.zip"
+          fi
           
       - name: Upload artifacts (macOS)
         if: matrix.os == 'macos-latest'
@@ -70,9 +100,7 @@ jobs:
           name: macos-build
           path: |
             dist/*.dmg
-            dist/*.zip
             dist/*-mac.zip
-            dist/*-mac-*.zip
             
       - name: Upload artifacts (Windows)
         if: matrix.os == 'windows-latest'

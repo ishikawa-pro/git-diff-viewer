@@ -1,38 +1,37 @@
 {
   "appId": "com.diffviewer.app",
   "productName": "Git Diff Viewer",
-  "extends": null,
   "directories": {
     "output": "dist"
   },
   "files": [
     "build/**/*",
     "package.json",
-    "cli.js"
+    "cli.js",
+    "!.vscode/**",
+    "!.git/**",
+    "!node_modules/.cache/**"
   ],
   "extraMetadata": {
     "main": "build/electron/main.js"
   },
   "npmRebuild": false,
-  "buildDependenciesFromSource": true,
-  "nodeGypRebuild": false,
   "mac": {
     "category": "public.app-category.developer-tools",
     "target": [
       {
         "target": "dmg",
-        "arch": ["x64", "arm64"]
+        "arch": ["universal"]
       },
       {
         "target": "zip",
-        "arch": ["x64", "arm64"]
+        "arch": ["universal"]
       }
     ],
     "icon": "logo.png",
-    "identity": null,
+    "identity": "-",
     "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+    "artifactName": "${productName}-${version}-${os}.${ext}"
   },
   "win": {
     "target": "nsis",
@@ -42,4 +41,4 @@
     "target": "AppImage",
     "icon": "logo.png"
   }
-} 
+}
