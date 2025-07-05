@@ -16,7 +16,6 @@
   "npmRebuild": false,
   "buildDependenciesFromSource": true,
   "nodeGypRebuild": false,
-  "forceCodeSigning": true,
   "mac": {
     "category": "public.app-category.developer-tools",
     "target": [
