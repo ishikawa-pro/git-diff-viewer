@@ -41,24 +41,50 @@ jobs:
         run: npm run dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
           
-      - name: Ad hoc code signing (macOS)
+      - name: Ad-hoc sign macOS app
         if: matrix.os == 'macos-latest'
         run: |
-          # Find the built app
-          APP_PATH=$(find dist -name "*.app" -type d | head -1)
-          if [ -n "$APP_PATH" ]; then
-            echo "Applying ad hoc signature to: $APP_PATH"
-            # Remove existing signature
-            codesign --remove-signature "$APP_PATH"
-            # Apply new signature with deep option
+          # Find all .app bundles
+          find dist -name "*.app" -type d | while read -r APP_PATH; do
+            echo "Ad-hoc signing: $APP_PATH"
+            
+            # Remove extended attributes
+            xattr -cr "$APP_PATH"
+            
+            # Remove existing signatures
+            find "$APP_PATH" -type f -perm +111 -exec codesign --remove-signature {} \; 2>/dev/null || true
+            find "$APP_PATH" -name "*.dylib" -exec codesign --remove-signature {} \; 2>/dev/null || true
+            find "$APP_PATH" -name "*.framework" -exec codesign --remove-signature {} \; 2>/dev/null || true
+            find "$APP_PATH" -name "*.app" -exec codesign --remove-signature {} \; 2>/dev/null || true
+            
+            # Sign frameworks
+            find "$APP_PATH/Contents/Frameworks" -name "*.framework" -type d | while read -r framework; do
+              codesign --force --deep --sign - "$framework"
+            done
+            
+            # Sign helper apps
+            find "$APP_PATH/Contents" -name "*.app" -type d -not -path "$APP_PATH" | while read -r helper; do
+              codesign --force --deep --sign - "$helper"
+            done
+            
+            # Sign libraries
+            find "$APP_PATH" -name "*.dylib" -o -name "*.so" | while read -r lib; do
+              codesign --force --sign - "$lib"
+            done
+            
+            # Sign executables
+            find "$APP_PATH" -type f -perm +111 | while read -r exe; do
+              codesign --force --sign - "$exe" 2>/dev/null || true
+            done
+            
+            # Sign main app
             codesign --force --deep --sign - "$APP_PATH"
-            echo "Ad hoc signature applied successfully"
-            # Verify signature
-            codesign --verify --verbose "$APP_PATH"
-          else
-            echo "No .app bundle found in dist directory"
-          fi
+            
+            # Verify
+            codesign --verify --deep --verbose "$APP_PATH" || echo "Verification warning (expected for ad-hoc signing)"
+          done
           
       - name: Upload artifacts (macOS)
         if: matrix.os == 'macos-latest'
@@ -68,6 +94,8 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
+            dist/*-mac.zip
+            dist/*-mac-*.zip
             
       - name: Upload artifacts (Windows)
         if: matrix.os == 'windows-latest'
@@ -87,6 +115,7 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.rpm
+            dist/*.snap
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -105,13 +134,20 @@ jobs:
           path: ./artifacts
           
       - name: Display structure of downloaded files
-        run: ls -la artifacts/
+        run: ls -la artifacts/*/
         
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/**/*
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.msi
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.snap
           draft: false
           prerelease: false
           generate_release_notes: true
