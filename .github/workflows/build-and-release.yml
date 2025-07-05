@@ -48,9 +48,18 @@ jobs:
           APP_PATH=$(find dist -name "*.app" -type d | head -1)
           if [ -n "$APP_PATH" ]; then
             echo "Applying ad hoc signature to: $APP_PATH"
+            # Sign all frameworks and helpers first
+            find "$APP_PATH" -name "*.framework" -o -name "*.app" | while read framework; do
+              echo "Signing: $framework"
+              codesign --remove-signature "$framework" 2>/dev/null || true
+              codesign --force --sign - "$framework" || echo "Failed to sign: $framework"
+            done
+            # Sign the main app bundle
             codesign --remove-signature "$APP_PATH" || true
-            codesign --deep --force --sign - "$APP_PATH"
+            codesign --force --deep --sign - "$APP_PATH"
             echo "Ad hoc signature applied successfully"
+            # Verify signature
+            codesign --verify --verbose "$APP_PATH" || echo "Signature verification failed"
           else
             echo "No .app bundle found in dist directory"
           fi
