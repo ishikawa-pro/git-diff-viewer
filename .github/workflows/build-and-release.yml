@@ -33,6 +33,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2-dev
           
+      - name: Rebuild native dependencies
+        run: npx electron-rebuild
+        
       - name: Build application
         run: npm run dist
         env:
