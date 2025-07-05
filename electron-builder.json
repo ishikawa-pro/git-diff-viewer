@@ -28,17 +28,17 @@
         "arch": ["universal"]
       }
     ],
-    "icon": "logo.png",
+    "icon": "public/logo.png",
     "identity": "-",
     "hardenedRuntime": true,
     "artifactName": "${productName}-${version}-${os}.${ext}"
   },
   "win": {
     "target": "nsis",
-    "icon": "logo.png"
+    "icon": "public/logo.png"
   },
   "linux": {
     "target": "AppImage",
-    "icon": "logo.png"
+    "icon": "public/logo.png"
   }
 }
