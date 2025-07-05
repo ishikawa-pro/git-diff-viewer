@@ -38,6 +38,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2-dev
           
+      - name: Build React app
+        run: npm run build
+        
+      - name: Copy electron files
+        run: cp -r electron build/
+        
       - name: Rebuild native dependencies
         run: npx electron-rebuild
         
