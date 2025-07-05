@@ -38,10 +38,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2-dev
           
+      - name: Rebuild native dependencies
+        run: npx electron-rebuild
+        
       - name: Build application
         run: npm run dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Fix code signing (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Re-sign all apps with consistent ad-hoc signature
+          for APP in dist/mac*/Git\ Diff\ Viewer.app; do
+            if [ -d "$APP" ]; then
+              echo "Re-signing $APP with ad-hoc signature..."
+              # Remove all existing signatures
+              find "$APP" -type f -perm +111 -exec codesign --remove-signature {} \; 2>/dev/null || true
+              # Sign with ad-hoc
+              codesign --force --deep --sign - "$APP"
+              # Verify
+              codesign --verify --deep --verbose "$APP"
+            fi
+          done
           
       - name: Upload artifacts (macOS)
         if: matrix.os == 'macos-latest'
