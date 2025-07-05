@@ -22,7 +22,11 @@
     "icon": "logo.png",
     "binaries": [
       "cli.js"
-    ]
+    ],
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false,
+    "identity": null,
+    "type": "development"
   },
   "win": {
     "target": "nsis",
