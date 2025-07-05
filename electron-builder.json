@@ -29,13 +29,9 @@
       }
     ],
     "icon": "logo.png",
-    "binaries": [
-      "cli.js"
-    ],
-    "hardenedRuntime": false,
+    "identity": "-",
+    "hardenedRuntime": true,
     "gatekeeperAssess": false,
-    "identity": null,
-    "type": "development",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   },
   "win": {

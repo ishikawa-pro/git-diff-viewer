@@ -1,6 +1,6 @@
 {
   "name": "diff-viewer",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "A rich Git diff viewer with syntax highlighting",
   "main": "build/electron/main.js",
   "homepage": "./",
