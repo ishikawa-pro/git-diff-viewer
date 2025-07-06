@@ -1,6 +1,27 @@
-# Git Diff Viewer (Electron)
+<div align="center">
+  <img src="docs/images/logo.png" alt="Git Diff Viewer Logo" width="128" height="128">
+  
+  # Git Diff Viewer (Electron)
+  
+  A rich desktop application for viewing Git diffs between branches with syntax highlighting.
+</div>
 
-A rich desktop application for viewing Git diffs between branches with syntax highlighting.
+## What You Can Do
+
+### GitHub-Style Diff Viewing
+View your Git changes in a familiar GitHub-style interface with syntax highlighting and file tree navigation.
+
+![GitHub-style diff view](docs/images/diff-view.png)
+
+### Add Comments to Code Changes
+Add comments directly to specific lines of code changes, making it easy to review and annotate your diffs.
+
+![Comment functionality](docs/images/comments.png)
+
+### Copy Comments for AI Instructions
+Easily copy your comments and use them as instructions for AI tools to help implement code changes.
+
+![Copy comments for AI](docs/images/copy-comments.png)
 
 ## Features
 
@@ -8,6 +29,8 @@ A rich desktop application for viewing Git diffs between branches with syntax hi
 - 🎨 **Syntax Highlighting**: Code is highlighted based on file type
 - 📁 **File Tree**: Navigate through changed files easily
 - 🔄 **Branch Comparison**: Compare any two branches
+- 💬 **Code Comments**: Add comments to specific lines in diffs
+- 📋 **Copy Comments**: Export comments for use with AI tools
 - 📊 **Change Statistics**: View insertions, deletions, and file counts
 - 🎯 **Modern UI**: Clean and responsive design with Tailwind CSS
 - 🔒 **Local Access**: Direct access to local Git repositories
