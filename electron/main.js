@@ -588,10 +588,27 @@ ipcMain.handle('get-local-diff', async (event) => {
     // Get diff summary for staged changes
     const stagedDiffSummary = await windowData.git.diffSummary(['--cached']);
     
+    // Get git status to detect untracked files
+    const status = await windowData.git.status();
+    
+    // Create file entries for untracked files (new files)
+    const untrackedFiles = status.files
+      .filter(file => file.working_dir === '?' && file.index === '?')
+      .map(file => ({
+        file: file.path,
+        changes: 0,
+        insertions: 0,
+        deletions: 0,
+        binary: false
+      }));
+    
+    // Combine modified files with untracked files
+    const allWorkingFiles = [...workingDiffSummary.files, ...untrackedFiles];
+    
     return {
       workingDiff,
       stagedDiff,
-      workingFiles: workingDiffSummary.files,
+      workingFiles: allWorkingFiles,
       stagedFiles: stagedDiffSummary.files,
       workingSummary: {
         insertions: workingDiffSummary.insertions,
@@ -626,6 +643,17 @@ ipcMain.handle('get-local-file-diff', async (event, filePath, isStaged = false) 
     } else {
       // Get working directory changes for specific file
       diff = await windowData.git.diff(['--', filePath]);
+      
+      // If no diff found, check if it's a new untracked file
+      if (!diff) {
+        const status = await windowData.git.status();
+        const fileStatus = status.files.find(file => file.path === filePath);
+        
+        if (fileStatus && fileStatus.working_dir === '?' && fileStatus.index === '?') {
+          // This is a new untracked file, show it as entirely new content
+          diff = await windowData.git.diff(['--no-index', '/dev/null', filePath]);
+        }
+      }
     }
     
     return { diff };
