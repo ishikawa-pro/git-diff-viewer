@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBranchHistory: (repoPath) => ipcRenderer.invoke('get-branch-history', repoPath),
   getLocalDiff: () => ipcRenderer.invoke('get-local-diff'),
   getLocalFileDiff: (filePath, isStaged) => ipcRenderer.invoke('get-local-file-diff', filePath, isStaged),
+  getUntrackedFileContent: (filePath) => ipcRenderer.invoke('get-untracked-file-content', filePath),
   
   // Event listener for CLI initialization
   onInitializeWithRepo: (callback) => ipcRenderer.on('initialize-with-repo', callback),

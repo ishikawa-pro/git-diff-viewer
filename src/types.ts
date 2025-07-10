@@ -38,6 +38,7 @@ export interface LocalDiffData {
   stagedDiff: string;
   workingFiles: FileChange[];
   stagedFiles: FileChange[];
+  untrackedFiles: FileChange[];
   workingSummary: {
     insertions: number;
     deletions: number;
@@ -66,6 +67,7 @@ declare global {
       getBranchHistory: (repoPath: string) => Promise<BranchHistory | null>;
       getLocalDiff: () => Promise<LocalDiffData>;
       getLocalFileDiff: (filePath: string, isStaged: boolean) => Promise<{ diff: string }>;
+      getUntrackedFileContent: (filePath: string) => Promise<{ diff: string }>;
       onInitializeWithRepo: (callback: (event: any, repoPath: string) => void) => void;
       removeInitializeWithRepoListener: (callback: (event: any, repoPath: string) => void) => void;
     };
