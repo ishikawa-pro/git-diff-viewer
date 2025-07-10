@@ -19,6 +19,7 @@ interface DiffViewerProps {
   onToggleCollapse?: () => void;
   isViewed?: boolean;
   onViewedChange?: (viewed: boolean) => void;
+  isLoading?: boolean;
 }
 
 interface DiffLine {
@@ -40,7 +41,7 @@ export interface Comment {
   fileName?: string;
 }
 
-const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1, onCommentsChange, isCollapsed = false, onToggleCollapse, isViewed = false, onViewedChange }) => {
+const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch, toBranch, isSelected = false, onRefresh, isRefreshing = false, searchTerm = '', currentSearchLineIndex = -1, currentSearchGlobalIndex = -1, onCommentsChange, isCollapsed = false, onToggleCollapse, isViewed = false, onViewedChange, isLoading = false }) => {
   const diffContainerRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -535,16 +536,63 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff, selectedFile, fromBranch,
       </div>
       
       {!isCollapsed && (
-        <div className="overflow-x-auto overflow-y-auto" ref={diffContainerRef}>
-          <div className="font-mono text-sm">
-            {parsedDiff.length > 0 ? (
-              parsedDiff.map((line, index) => renderDiffLine(line, index))
-            ) : (
-              <div className="px-4 py-8 text-center text-gray-500">
-                No changes found for this file
+        <div className="overflow-x-auto overflow-y-auto max-h-[600px]" ref={diffContainerRef}>
+          {isLoading ? (
+            <div className="p-4">
+              <div className="space-y-1 font-mono text-sm">
+                {/* Skeleton loader that mimics diff appearance */}
+                <div className="animate-pulse space-y-1">
+                  {/* Hunk header */}
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-blue-100 rounded mr-2"></div>
+                    <div className="h-4 bg-blue-100 rounded w-48"></div>
+                  </div>
+                  {/* Context lines */}
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-gray-100 rounded mr-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-full"></div>
+                  </div>
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-gray-100 rounded mr-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                  </div>
+                  {/* Removed line */}
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-red-100 rounded mr-2"></div>
+                    <div className="h-4 bg-red-100 rounded w-4/6"></div>
+                  </div>
+                  {/* Added lines */}
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-green-100 rounded mr-2"></div>
+                    <div className="h-4 bg-green-100 rounded w-3/4"></div>
+                  </div>
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-green-100 rounded mr-2"></div>
+                    <div className="h-4 bg-green-100 rounded w-5/6"></div>
+                  </div>
+                  {/* More context */}
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-gray-100 rounded mr-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-4/5"></div>
+                  </div>
+                  <div className="flex">
+                    <div className="w-16 h-4 bg-gray-100 rounded mr-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-3/5"></div>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="font-mono text-sm">
+              {parsedDiff.length > 0 ? (
+                parsedDiff.map((line, index) => renderDiffLine(line, index))
+              ) : (
+                <div className="px-4 py-8 text-center text-gray-500">
+                  No changes found for this file
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       

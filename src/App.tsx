@@ -24,6 +24,7 @@ function App() {
   const fileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [localDiffData, setLocalDiffData] = useState<LocalDiffData | null>(null);
   const [localFileDiffs, setLocalFileDiffs] = useState<Record<string, { working: string; staged: string }>>({});
+  const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
   const [currentView, setCurrentView] = useState<ViewMode>('repository-select');
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
@@ -285,32 +286,57 @@ function App() {
       const data = await window.electronAPI.getLocalDiff();
       setLocalDiffData(data);
       setSelectedFile(null);
-
-      // 各ファイルの個別ローカル差分を取得
-      const diffs: Record<string, { working: string; staged: string }> = {};
-      const allFiles = new Set([...data.workingFiles.map(f => f.file), ...data.stagedFiles.map(f => f.file)]);
-
-      for (const file of allFiles) {
-        try {
-          const [workingResult, stagedResult] = await Promise.all([
-            window.electronAPI.getLocalFileDiff(file, false),
-            window.electronAPI.getLocalFileDiff(file, true)
-          ]);
-          diffs[file] = {
-            working: workingResult.diff,
-            staged: stagedResult.diff
-          };
-        } catch (error) {
-          console.error(`Failed to fetch local diff for ${file}:`, error);
-          diffs[file] = { working: '', staged: '' };
-        }
-      }
-      setLocalFileDiffs(diffs);
+      // Clear previous diffs when refreshing
+      setLocalFileDiffs({});
+      setLoadingFiles({});
     } catch (error) {
       console.error('Failed to fetch local diff:', error);
       alert(`Failed to fetch local diff: ${error}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLocalFileDiff = async (file: string) => {
+    // Skip if already loaded or loading
+    if (localFileDiffs[file] || loadingFiles[file]) return;
+    
+    setLoadingFiles(prev => ({ ...prev, [file]: true }));
+    try {
+      const isUntracked = localDiffData?.untrackedFiles.some(f => f.file === file);
+      
+      if (isUntracked) {
+        // For untracked files, get the content as a diff
+        const untrackedResult = await window.electronAPI.getUntrackedFileContent(file);
+        setLocalFileDiffs(prev => ({
+          ...prev,
+          [file]: {
+            working: untrackedResult.diff,
+            staged: ''
+          }
+        }));
+      } else {
+        // For tracked files, get normal diffs
+        const [workingResult, stagedResult] = await Promise.all([
+          window.electronAPI.getLocalFileDiff(file, false),
+          window.electronAPI.getLocalFileDiff(file, true)
+        ]);
+        setLocalFileDiffs(prev => ({
+          ...prev,
+          [file]: {
+            working: workingResult.diff,
+            staged: stagedResult.diff
+          }
+        }));
+      }
+    } catch (error) {
+      console.error(`Failed to fetch local diff for ${file}:`, error);
+      setLocalFileDiffs(prev => ({
+        ...prev,
+        [file]: { working: '', staged: '' }
+      }));
+    } finally {
+      setLoadingFiles(prev => ({ ...prev, [file]: false }));
     }
   };
 
@@ -581,11 +607,13 @@ function App() {
           <LocalChangesView
             localDiffData={localDiffData}
             localFileDiffs={localFileDiffs}
+            loadingFiles={loadingFiles}
             selectedFile={selectedFile}
             loading={loading}
             isRefreshing={isRefreshing}
             isGlobalRefreshing={isGlobalRefreshing}
             onFetchLocalDiff={fetchLocalDiff}
+            onFetchFileDiff={fetchLocalFileDiff}
             onFileSelect={handleFileSelectWithScroll}
             onRefresh={handleRefresh}
             onGlobalRefresh={handleGlobalRefresh}

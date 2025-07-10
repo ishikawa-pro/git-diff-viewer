@@ -588,11 +588,21 @@ ipcMain.handle('get-local-diff', async (event) => {
     // Get diff summary for staged changes
     const stagedDiffSummary = await windowData.git.diffSummary(['--cached']);
     
+    // Get untracked files
+    const statusSummary = await windowData.git.status();
+    const untrackedFiles = (statusSummary.not_added || []).map(file => ({
+      file,
+      changes: 0,
+      insertions: 0,
+      deletions: 0
+    }));
+    
     return {
       workingDiff,
       stagedDiff,
       workingFiles: workingDiffSummary.files,
       stagedFiles: stagedDiffSummary.files,
+      untrackedFiles,
       workingSummary: {
         insertions: workingDiffSummary.insertions,
         deletions: workingDiffSummary.deletions,
@@ -606,6 +616,31 @@ ipcMain.handle('get-local-diff', async (event) => {
     };
   } catch (error) {
     throw new Error(`Failed to get local diff: ${error.message}`);
+  }
+});
+
+// Add handler for untracked file content
+ipcMain.handle('get-untracked-file-content', async (event, filePath) => {
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  const windowId = senderWindow.id;
+  const windowData = windows.get(windowId);
+  
+  if (!windowData || !windowData.repoPath) {
+    throw new Error('No repository selected');
+  }
+  
+  try {
+    const fullPath = path.join(windowData.repoPath, filePath);
+    const content = await fs.promises.readFile(fullPath, 'utf8');
+    
+    // Create a diff-like format for untracked files
+    const lines = content.split('\n');
+    const diffLines = lines.map((line, index) => `+${line}`).join('\n');
+    const diff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n${diffLines}`;
+    
+    return { diff };
+  } catch (error) {
+    throw new Error(`Failed to read untracked file: ${error.message}`);
   }
 });
 

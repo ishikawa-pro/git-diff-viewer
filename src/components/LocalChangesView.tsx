@@ -8,11 +8,13 @@ import { LocalDiffData } from '../types';
 interface LocalChangesViewProps {
   localDiffData: LocalDiffData | null;
   localFileDiffs: Record<string, { working: string; staged: string }>;
+  loadingFiles: Record<string, boolean>;
   selectedFile: string | null;
   loading: boolean;
   isRefreshing: boolean;
   isGlobalRefreshing: boolean;
   onFetchLocalDiff: () => Promise<void>;
+  onFetchFileDiff: (file: string) => Promise<void>;
   onFileSelect: (file: string) => void;
   onRefresh: () => Promise<void>;
   onGlobalRefresh: () => Promise<void>;
@@ -26,11 +28,13 @@ interface LocalChangesViewProps {
 const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   localDiffData,
   localFileDiffs,
+  loadingFiles,
   selectedFile,
   loading,
   isRefreshing,
   isGlobalRefreshing,
   onFetchLocalDiff,
+  onFetchFileDiff,
   onFileSelect,
   onRefresh,
   onGlobalRefresh,
@@ -46,6 +50,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
   const [viewedFiles, setViewedFiles] = useState<Record<string, boolean>>({});
   const [previousDiffs, setPreviousDiffs] = useState<Record<string, { working: string; staged: string }>>({});
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     if (!localDiffData && !loading) {
@@ -53,8 +58,47 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
     }
   }, [localDiffData, loading, onFetchLocalDiff]);
 
+  // Set up Intersection Observer for auto-loading visible files
+  useEffect(() => {
+    if (!localDiffData) return;
+
+    // Create observer to detect when file elements come into view
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const file = entry.target.getAttribute('data-file');
+            if (file && !localFileDiffs[file] && !loadingFiles[file]) {
+              onFetchFileDiff(file);
+            }
+          }
+        });
+      },
+      {
+        rootMargin: '100px', // Start loading 100px before element is visible
+        threshold: 0.1
+      }
+    );
+
+    // Observe all file elements
+    Object.entries(fileRefs.current).forEach(([file, element]) => {
+      if (element && observerRef.current) {
+        element.setAttribute('data-file', file);
+        observerRef.current.observe(element);
+      }
+    });
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [localDiffData, localFileDiffs, loadingFiles, onFetchFileDiff]);
+
   const handleFileSelect = (file: string) => {
     onFileSelect(file);
+    // Load file diff when selected
+    onFetchFileDiff(file);
     // Note: Scrolling is now handled by the parent component when needed
   };
 
@@ -182,7 +226,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-6 p-6">
           <div className="lg:col-span-1">
             <FileTree
-              files={showOnlyStaged ? localDiffData.stagedFiles : [...localDiffData.workingFiles, ...localDiffData.stagedFiles]}
+              files={showOnlyStaged ? localDiffData.stagedFiles : [...localDiffData.workingFiles, ...localDiffData.stagedFiles, ...localDiffData.untrackedFiles]}
               onFileSelect={handleFileSelect}
               selectedFile={selectedFile}
             />
@@ -192,7 +236,7 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
               {(() => {
                 const allFiles = showOnlyStaged 
                   ? localDiffData.stagedFiles.map(f => f.file)
-                  : Array.from(new Set([...localDiffData.workingFiles.map(f => f.file), ...localDiffData.stagedFiles.map(f => f.file)]));
+                  : Array.from(new Set([...localDiffData.workingFiles.map(f => f.file), ...localDiffData.stagedFiles.map(f => f.file), ...localDiffData.untrackedFiles.map(f => f.file)]));
                 
                 return allFiles.map((file) => (
                   <div
@@ -207,14 +251,21 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                     }`}
                   >
                     <div className="space-y-4">
-                      {!showOnlyStaged && localFileDiffs[file]?.working && (
+                      {/* Working Directory Changes */}
+                      {!showOnlyStaged && (
+                        localDiffData.workingFiles.some(f => f.file === file) || 
+                        localDiffData.untrackedFiles.some(f => f.file === file)
+                      ) && (
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Working Directory Changes</h3>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                            {localDiffData.untrackedFiles.some(f => f.file === file) ? 'Untracked File' : 'Working Directory Changes'}
+                          </h3>
                           <DiffViewer
-                            diff={localFileDiffs[file].working}
+                            diff={localFileDiffs[file]?.working || ''}
+                            isLoading={!localFileDiffs[file]}
                             selectedFile={file}
-                            fromBranch="HEAD"
-                            toBranch="Working Directory"
+                            fromBranch={localDiffData.untrackedFiles.some(f => f.file === file) ? "/dev/null" : "HEAD"}
+                            toBranch={localDiffData.untrackedFiles.some(f => f.file === file) ? "Untracked" : "Working Directory"}
                             isSelected={selectedFile === file}
                             onRefresh={onRefresh}
                             isRefreshing={isRefreshing}
@@ -229,11 +280,14 @@ const LocalChangesView: React.FC<LocalChangesViewProps> = ({
                           />
                         </div>
                       )}
-                      {localFileDiffs[file]?.staged && (
+                      
+                      {/* Staged Changes */}
+                      {localDiffData.stagedFiles.some(f => f.file === file) && (
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 mb-2">Staged Changes</h3>
                           <DiffViewer
-                            diff={localFileDiffs[file].staged}
+                            diff={localFileDiffs[file]?.staged || ''}
+                            isLoading={!localFileDiffs[file]}
                             selectedFile={file}
                             fromBranch="HEAD"
                             toBranch="Staged"
